@@ -16,7 +16,6 @@ import java.net.Socket;
 import java.util.Calendar;
 import java.util.TimeZone;
 
-import java.nio.ByteBuffer;
 
 
 /**
@@ -443,23 +442,6 @@ public class prosumerAgent extends Agent
 
 	} // End callMatlab
 	
-	private void callMatlab1(String msgContent) 
-	{
-		ACLMessage msg;
-
-		// Send the message to Matlab via JADE
-		msg = new ACLMessage(ACLMessage.INFORM);
-		msg.addReceiver(new AID(ip + ":1234", AID.ISGUID));
-		msg.setContent(msgContent);
-
-		// Encode message to send as an ACL Message
-		StringACLCodec codec = new StringACLCodec(in, out);
-		codec.write(msg);
-		out.flush();
-
-	} // End callMatlab
-
-
 	/**
 	 * Sends a message to another agent
 	 * @param targetName
