@@ -1,5 +1,5 @@
 package mg;
-import jade.core.Agent;
+
 import jade.core.Profile;
 import jade.core.ProfileImpl;
 import jade.core.Runtime;
@@ -12,13 +12,10 @@ public class ctrl {
 	
 	static ContainerController cController;
 
-	static String AGENT_NAME = "matlabComAgent"; 
-	static String AGENT_CLASS = "mg.MatlabComAgent";
-	//static String PWRWORLD_TESTER_NAME = "Tester"; 
-	//static String PWRWORLD_TESTER_CLASS = "pwrworld.MatlabComAgentTest"; 
+	static String COMAGENT_NAME = "simComAgent"; 
+	static String COMAGENT_CLASS = "mg.simComAgent";
 
 	public static void main(String[] args) {
-		System.out.print("Hello World!");
 		try 
 		{
 			runJade();
@@ -40,9 +37,8 @@ public class ctrl {
 		cController = rt.createMainContainer(p);			
 		rt.setCloseVM(true);
 	
-		// Launch Powerworld interface agent
-		addAgent(AGENT_NAME, AGENT_CLASS, null);
-		// addAgent(PWRWORLD_TESTER_NAME, PWRWORLD_TESTER_CLASS, null);
+		// Launch simulation communication agent
+		addAgent(COMAGENT_NAME, COMAGENT_CLASS, null);
 	}
 
 	/**
@@ -57,6 +53,5 @@ public class ctrl {
 		AgentController ac = cController.createNewAgent(name, type, argsObj);
 		ac.start();
 	}	
-	
 	
 }

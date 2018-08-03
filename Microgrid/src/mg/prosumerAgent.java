@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
  * @author tarmokorotko
  * forked from gitHub user rroche
  */
-public class MatlabComAgent extends Agent
+public class prosumerAgent extends Agent
 {
 
 	/**
@@ -129,7 +129,7 @@ public class MatlabComAgent extends Agent
 			String msgContent = String.valueOf(cal.get(Calendar.HOUR))+" "+ 
 					String.valueOf(cal.get(Calendar.MINUTE))+" "+
 					String.valueOf(cal.get(Calendar.SECOND))+" "+
-					String.valueOf(0)+" "+
+					String.valueOf(30)+" "+
 					String.valueOf(0)+" "+
 					String.valueOf(0)+" "+
 					String.valueOf(0)+" "+
