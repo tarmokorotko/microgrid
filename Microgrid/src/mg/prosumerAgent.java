@@ -405,7 +405,6 @@ public class prosumerAgent extends Agent
 		catch (IOException e) {	e.printStackTrace(); }
 	}
 
-
 	/**
 	 * Sends a message to Matlab and returns an answer
 	 * @param msgContent

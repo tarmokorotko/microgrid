@@ -20,9 +20,7 @@ public class simComAgent extends Agent
 
 	private static final long serialVersionUID = 195263862L;
 	
-	//Double[] ag = new Double[16] {0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0};
-	Double[] ag = {10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-		
+	Double[] ag = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};		
 
 	// TCP connection variables
 	ServerSocket srvr = null;
@@ -60,7 +58,7 @@ public class simComAgent extends Agent
 		}		
 
 		// Run behavior		
-		sendPeriodical sp = new sendPeriodical(this, 786);
+		sendPeriodical sp = new sendPeriodical(this, 1000);
 		addBehaviour(sp);
 
 	} // End setup
