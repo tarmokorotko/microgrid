@@ -17,7 +17,7 @@ public class createShell {
 
         for(int i = 0; i<5; i++) {           
             System.out.println(i + "  " + d);
-            gui.createShell(String.format("PRSMR_%s", i));  
+            //gui.createShell(String.format("PRSMR_%s", i));  
             Thread.sleep(500);
         }
 

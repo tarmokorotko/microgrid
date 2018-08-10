@@ -2,6 +2,8 @@ package gui;
 
 import org.eclipse.swt.widgets.Display;
 
+import mg.prosumerAgent;
+
 public class RunShell implements Runnable {
 	
 	private Display display;
@@ -24,17 +26,18 @@ public class RunShell implements Runnable {
 		     }		
 	}
 	
-	private void openShell(Display display, String name) {
-		new ShellTestGUI(display, name);
+	private void openShell(Display display, prosumerAgent pa, String name) {
+		//new ShellTestGUI(display, name);
+		new PrsmrGUI(display, pa ,name);
 	}
 	
-	public synchronized void createShell(final String name)
+	public synchronized void createShell(final String name, prosumerAgent pa)
     {
         if (display == null || display.isDisposed()) 
             return;
         display.asyncExec(new Runnable() {
             public void run() {
-        		openShell(display, name);
+        		openShell(display, pa, name);
             }
         });        
     }	

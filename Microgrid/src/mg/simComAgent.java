@@ -1,7 +1,10 @@
 package mg;
 
+import jade.core.AID;
 import jade.core.Agent;
+import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.TickerBehaviour;
+import jade.lang.acl.ACLMessage;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -39,7 +42,7 @@ public class simComAgent extends Agent
 		// Get arguments
 		Object[] args = getArguments();
 		filePath = (String) args[0];
-
+		
 		// Create TCP connection
 		try 
 		{
@@ -56,11 +59,17 @@ public class simComAgent extends Agent
 		{
 			e.printStackTrace();
 		}		
-
-		// Run behavior		
+		
+		// Run behaviors	
+		// Periodical behaviour
 		sendPeriodical sp = new sendPeriodical(this, 1000);
 		addBehaviour(sp);
 
+		// Receive messages behaviour
+		receiveMsg rm = new receiveMsg();
+		addBehaviour(rm);
+
+		
 	} // End setup
 
 	/**
@@ -68,8 +77,7 @@ public class simComAgent extends Agent
 	 * @param Agent
 	 * @param period in seconds
 	 */
-	class sendPeriodical extends TickerBehaviour
-	{
+	private class sendPeriodical extends TickerBehaviour {
 
 		public sendPeriodical(Agent a, long period) {
 			super(a, period);
@@ -83,7 +91,7 @@ public class simComAgent extends Agent
 			//Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));			
 			String msgContent = composeMsg(ag);
 					
-			// send message
+			// send message	
 			out.print(msgContent);
 			out.flush();
 			
@@ -94,6 +102,7 @@ public class simComAgent extends Agent
 		
 	} // end behaviour
 
+	
 	/**
 	 * Composes TCP message to be sent
 	 * @param data - A 16 element array of Double
@@ -109,6 +118,42 @@ public class simComAgent extends Agent
 		return msg;		
 	} // end of composeMsg
 	
-	//TODO Agent behaviour for checking received messages buffer
 	
+	/**
+	 * Received message buffer check behaviour
+	 * @author Tarmo
+	 *
+	 */
+	private class receiveMsg extends CyclicBehaviour {
+
+		private static final long serialVersionUID = 7623834276113064445L;
+
+		public void action() {
+			System.out.println("Receive messages check activated");
+			
+			ACLMessage msg = receive();				
+			if (msg != null) {
+				String ontology = msg.getOntology();
+				String conversation = msg.getConversationId();
+				String content = msg.getContent();
+				AID sender = msg.getSender();
+				
+				System.out.println(String.format("Ontology: %s; Conversation ID: %s; Content: %s; Sender: %s", ontology, conversation, content, sender.getLocalName()));
+			
+				switch (conversation) {
+				case "UPDATE":
+					for(int i=0;i<ctrl.prsmr.length;i++) {
+						if(ctrl.prsmr[i].ID.equals(sender.getLocalName())) {
+							ag[i] = Double.parseDouble(content);
+						}
+					}
+				}
+				
+			
+			}
+			else {
+				block();
+				}	
+			} //end action
+	} //end behaviour
 }

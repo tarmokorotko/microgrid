@@ -23,7 +23,6 @@ public class ShellTestGUI {
 	static final String TESTING = "Testing 1 2 3";
     
 	public ShellTestGUI(Display display, String name) { 
-		//Display display = Display.getDefault();
 		final Shell shell = new Shell(display, SWT.CLOSE); 
               
 		shell.setText(name); 

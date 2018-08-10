@@ -97,7 +97,7 @@ public class MgGUI {
 	     public ChildShell(prosumerAgent a, String name) 
 	     { 
 	    	System.out.println("Creating child Shell "+name); 
-	        new PrsmrGUI(a, name);	
+	        new PrsmrGUI(null, a, name);	
 	        display.wake();
 	     } 	     
 	  } 

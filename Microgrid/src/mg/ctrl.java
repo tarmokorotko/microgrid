@@ -20,7 +20,7 @@ public class ctrl {
 	static String COMAGENT_CLASS = "mg.simComAgent";
 	static String PRSMRAGENT_CLASS = "mg.prosumerAgent";
 
-	static Prsmr[] prsmr = {new Prsmr("PRSMR_0"), new Prsmr("PRSMR_1"), new Prsmr("PRSMR_2"), new Prsmr("PRSMR_2_0"), new Prsmr("PRSMR_2_1")}; 
+	public static Prsmr[] prsmr = {new Prsmr("PRSMR_0"), new Prsmr("PRSMR_1"), new Prsmr("PRSMR_2"), new Prsmr("PRSMR_2_0"), new Prsmr("PRSMR_2_1")}; 
 	
 	public static void main(String[] args) throws Exception {	
 		
