@@ -1,7 +1,5 @@
 package mg;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.TimerTask;
 
 import gui.RunShell;
@@ -26,7 +24,7 @@ public class ctrl {
 	public static void main(String[] args) throws Exception {	
 		// Initialize environment
 		Util.initialize();
-		String experimentDataFilePath = "C:/Users/Tarmo/OneDrive - TTU 2/Doktoritöö/Simulatsiooni andmed/Experiment case 4.xlsx";
+		//String experimentDataFilePath = "C:/Users/Tarmo/OneDrive - TTU 2/Doktoritöö/Simulatsiooni andmed/Experiment case 4.xlsx";
 		
 		/*
 		List<int[]> sheetData = new ArrayList<int[]>();
