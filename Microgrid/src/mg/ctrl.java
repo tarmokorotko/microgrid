@@ -1,6 +1,7 @@
 package mg;
 
-import java.util.Timer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.TimerTask;
 
 import gui.RunShell;
@@ -23,6 +24,22 @@ public class ctrl {
 	public static Prsmr[] prsmr = {new Prsmr("PRSMR_0"), new Prsmr("PRSMR_1"), new Prsmr("PRSMR_2"), new Prsmr("PRSMR_2_0"), new Prsmr("PRSMR_2_1")}; 
 	
 	public static void main(String[] args) throws Exception {	
+		// Initialize environment
+		Util.initialize();
+		String experimentDataFilePath = "C:/Users/Tarmo/OneDrive - TTU 2/Doktoritöö/Simulatsiooni andmed/Experiment case 4.xlsx";
+		
+		/*
+		List<int[]> sheetData = new ArrayList<int[]>();
+		int[] cellData1 = {12, 7};
+		int[] cellData2 = {12, 8};
+		sheetData.add(cellData1);
+		sheetData.add(cellData2);
+		List<String> test = Util.readFromExcel(experimentDataFilePath, "PCC", sheetData);
+		
+		for(int i=0;i<test.size();i++) {
+			System.out.println(test.get(i));
+		}
+		*/
 		
 		// Set up Display thread
 		final RunShell gui = new RunShell();
@@ -38,8 +55,8 @@ public class ctrl {
 		catch (ControllerException e) {}		
 		
 		// Periodic task
-		Timer timer = new Timer();
-		timer.schedule(new ScheduledTask(), 0, 1000);		
+		//Timer timer = new Timer();
+		//timer.schedule(new ScheduledTask(), 0, 1000);		
 		
 	}
 	

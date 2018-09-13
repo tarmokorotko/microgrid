@@ -1,17 +1,18 @@
 package mg;
 
-import gui.*;
+
 
 public class test {
-
+	static Auction ac = new Auction();
+	
 	public static void main(String[] args) {
+
+		Util.initialize();
 		
-		try {
-			PlaygroundPart window = new PlaygroundPart();
-			window.open();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}	
+		ac.startNewRound();
+		ac.startNewRound();
+		
+		
 		
 	}
 

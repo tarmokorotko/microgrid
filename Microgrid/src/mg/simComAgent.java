@@ -120,7 +120,7 @@ public class simComAgent extends Agent
 	
 	
 	/**
-	 * Received message buffer check behaviour
+	 * Simulation communication agent received message buffer check behaviour
 	 * @author Tarmo
 	 *
 	 */
