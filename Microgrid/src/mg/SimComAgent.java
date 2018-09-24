@@ -18,7 +18,7 @@ import java.net.Socket;
  * @author tarmokorotko
  * forked from gitHub user rroche
  */
-public class simComAgent extends Agent
+public class SimComAgent extends Agent
 {
 
 	private static final long serialVersionUID = 195263862L;
@@ -37,7 +37,7 @@ public class simComAgent extends Agent
 	// Agent setup method
 	protected void setup() 
 	{
-		System.out.println(getName() + " successfully started");
+		Util.logString(getLocalName() + " successfully started", 20);
 				
 		// Get arguments
 		Object[] args = getArguments();
@@ -49,7 +49,7 @@ public class simComAgent extends Agent
 			// Create server and socket
 			srvr = new ServerSocket(port);
 			skt = srvr.accept();
-			System.out.println(getLocalName() + ": Server connection initiated");
+			Util.logString(getLocalName() + ": Server connection initiated", 20);
 
 			// Create writer and reader to send and receive data
 			out = new PrintWriter(skt.getOutputStream(), true);
@@ -95,8 +95,8 @@ public class simComAgent extends Agent
 			out.print(msgContent);
 			out.flush();
 			
-			// output diagnostics to console			
-			System.out.println(getLocalName() + ": Message sent to Matlab: " + msgContent);
+			// log diagnostics
+			Util.logString(getLocalName() + ": Message sent to Matlab: " + msgContent, 20);
 
 		}// end action
 		
@@ -129,7 +129,7 @@ public class simComAgent extends Agent
 		private static final long serialVersionUID = 7623834276113064445L;
 
 		public void action() {
-			System.out.println("Receive messages check activated");
+			Util.logString("Receive messages check activated", 20);
 			
 			ACLMessage msg = receive();				
 			if (msg != null) {
@@ -138,8 +138,8 @@ public class simComAgent extends Agent
 				String content = msg.getContent();
 				AID sender = msg.getSender();
 				
-				System.out.println(String.format("Ontology: %s; Conversation ID: %s; Content: %s; Sender: %s", ontology, conversation, content, sender.getLocalName()));
-			
+				Util.logString(String.format("Ontology: %s; Conversation ID: %s; Content: %s; Sender: %s", ontology, conversation, content, sender.getLocalName()), 20);
+				
 				switch (conversation) {
 				case "UPDATE":
 					for(int i=0;i<ctrl.prsmr.length;i++) {
@@ -147,8 +147,7 @@ public class simComAgent extends Agent
 							ag[i] = Double.parseDouble(content);
 						}
 					}
-				}
-				
+				}				
 			
 			}
 			else {

@@ -7,7 +7,7 @@ public class BidSet {
 	
 	List<Bid> bids = new ArrayList<Bid>();
 	
-	public class Bid {
+	public static class Bid {
 		Double V;
 		Double C;
 		

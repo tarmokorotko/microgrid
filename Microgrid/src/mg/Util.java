@@ -20,18 +20,19 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import com.ibm.icu.text.DateFormat;
 import com.ibm.icu.text.SimpleDateFormat;
 
+
+
 public final class Util {
 	// System constants
 	// Logging
 	final static String logFilePath = "C:/Users/Tarmo/Documents/Microgrid_sim/log.txt";
 	final static Boolean appendLog = true;
 	final static Boolean logToFile = true;
-	
 	// Prosumer
 	public final static String[] prosumerRoles = {"Island", "Vendor", "Purchaser", "Distributor"};
 	
 	// Experiment
-	public final static int auctionCycle = 1000; // Auction cycle time in ms
+	public final static int auctionCycle = 5000; // Auction cycle time in ms
 	public final static String experimentDataFilePath = "C:/Users/Tarmo/OneDrive - TTU 2/Doktoritöö/SimulationInput/Experiment_case_4.xlsx";
 	public final static int firstDataRow = 5;
 	public final static String firstDataCol = "V";
@@ -49,6 +50,7 @@ public final class Util {
 		// Set up logger
 		Logger logger = Logger.getLogger("microgridLogger");
 		logger.setLevel(Level.ALL);
+		System.setProperty("java.util.logging.SimpleFormatter.format", "(%4$-6s)	[%1$tQ]	[%1$tY-%1$tm-%1$td %1$tH:%1$tM:%1$tS.%1$tL]	%5$s%6$s.%n");
 		
 		try {
 			// Log to existing file or create new log file
@@ -84,8 +86,10 @@ public final class Util {
 	public static void logString(String s, Object... varArg) {
 		Integer lev = 20;
 		Boolean logToConsole = true;
-		 
+		
 		Logger logger = Logger.getLogger("microgridLogger");
+		
+		
 		
 		// Handle inputs
 		if (varArg.length > 0) {

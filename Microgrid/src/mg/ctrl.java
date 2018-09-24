@@ -1,7 +1,5 @@
 package mg;
 
-import java.util.TimerTask;
-
 import gui.RunShell;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
@@ -15,29 +13,15 @@ public class ctrl {
 	
 	static ContainerController cController;
 
-	static String COMAGENT_NAME = "simComAgent"; 
-	static String COMAGENT_CLASS = "mg.simComAgent";
-	static String PRSMRAGENT_CLASS = "mg.prosumerAgent";
+	private static final String COMAGENT_NAME = "simComAgent"; 
+	private static final String COMAGENT_CLASS = "mg.SimComAgent";
+	private static final String PRSMRAGENT_CLASS = "mg.ProsumerAgent";
 
 	public static Prsmr[] prsmr = {new Prsmr("PRSMR_0"), new Prsmr("PRSMR_1"), new Prsmr("PRSMR_2"), new Prsmr("PRSMR_2_0"), new Prsmr("PRSMR_2_1")}; 
 	
 	public static void main(String[] args) throws Exception {	
 		// Initialize environment
-		Util.initialize();
-		//String experimentDataFilePath = "C:/Users/Tarmo/OneDrive - TTU 2/Doktoritöö/Simulatsiooni andmed/Experiment case 4.xlsx";
-		
-		/*
-		List<int[]> sheetData = new ArrayList<int[]>();
-		int[] cellData1 = {12, 7};
-		int[] cellData2 = {12, 8};
-		sheetData.add(cellData1);
-		sheetData.add(cellData2);
-		List<String> test = Util.readFromExcel(experimentDataFilePath, "PCC", sheetData);
-		
-		for(int i=0;i<test.size();i++) {
-			System.out.println(test.get(i));
-		}
-		*/
+		Util.initialize();		
 		
 		// Set up Display thread
 		final RunShell gui = new RunShell();
@@ -50,11 +34,7 @@ public class ctrl {
 			runJade(gui);
 		} 
 		catch (StaleProxyException e) {} 
-		catch (ControllerException e) {}		
-		
-		// Periodic task
-		//Timer timer = new Timer();
-		//timer.schedule(new ScheduledTask(), 0, 1000);		
+		catch (ControllerException e) {}			
 		
 	}
 	
@@ -94,16 +74,5 @@ public class ctrl {
 		AgentController ac = cController.createNewAgent(name, type, argsObj);
 		ac.start();
 	}	
-	
-	/**
-	 * Periodically executed task
-	 * @author Tarmo
-	 *
-	 */
-	public static class ScheduledTask extends TimerTask {
-			public void run() {
-				System.out.println("Periodical task executed");
-			}
-	}
 	
 }

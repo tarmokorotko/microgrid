@@ -1,6 +1,8 @@
 package mg;
 
+import jade.lang.acl.ACLMessage;
+
 public interface AuctionInterface {
-	public void startNewRound(); // method for initiating new auction round
-	public void setParticipantData(); // method for setting auction participant data
+	public ACLMessage startNewRound(); // method for initiating new auction round
+	public void presentBid(String agentName, BidSet b); // method for setting auction participant data
 }

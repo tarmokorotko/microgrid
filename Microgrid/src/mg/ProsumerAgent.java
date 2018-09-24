@@ -8,7 +8,6 @@ import jade.domain.DFService;
 import jade.domain.FIPAException;
 import jade.domain.FIPANames;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
-import jade.domain.FIPAAgentManagement.FailureException;
 import jade.domain.FIPAAgentManagement.NotUnderstoodException;
 import jade.domain.FIPAAgentManagement.RefuseException;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
@@ -16,18 +15,13 @@ import jade.gui.GuiAgent;
 import jade.gui.GuiEvent;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
-import jade.proto.ContractNetInitiator;
-import jade.proto.ContractNetResponder;
 import jade.proto.SubscriptionInitiator;
 import jade.proto.SubscriptionResponder;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.Vector;
 
 import gui.PrsmrGUI;
@@ -40,23 +34,28 @@ import mg.BidSet.Bid;
  * @author tarmokorotko
  * forked from gitHub user rroche
  */
-public class prosumerAgent extends GuiAgent
+public class ProsumerAgent extends GuiAgent
 {
-	transient protected PrsmrGUI myGui;
 	private static final long serialVersionUID = 195263862L;
+	
+	transient protected PrsmrGUI myGui;
+	
 	private String role = Util.prosumerRoles[0];
-	//private Double Sp = 0.0;
-	//private Auction ac = new Auction();
+	private Auction ac;
+	
+	Distributor db = new Distributor(this, Util.auctionCycle);
+	MySubscriptionInit msi;
+	NegotiationClientFSM ncf;
+	MySubscriptionResp msr;
+	NegotiationServerFSM nsf;
 	
 	/**
 	 * Initialization of agent
 	 */
 	protected void setup() 
 	{
-		
-		Util.logString(getName() + " successfully started", 20);
-		
-		//List<Double> bids = composeBid();
+		// Log
+		Util.logString(getLocalName() + ": successfully started", 20);
 		
 		// Get arguments
 		Object[] args = getArguments();
@@ -65,19 +64,15 @@ public class prosumerAgent extends GuiAgent
 		RunShell gui = (RunShell)args[0];
 		gui.createShell(getName(), this);		
 				
-		// Run behavior
+		// Run behavior for registering agents at Simulation Communication agent
 		Register rg = new Register();
-		addBehaviour(rg);
-		
-		Distributor db = new Distributor(this, 1000);
-		addBehaviour(db);
-		
+		addBehaviour(rg);		
+				
 	} // End setup
 	
 	/**
 	 * Behaviour for registering agents at Simulation Communication agent
 	 * @author Tarmo
-	 *
 	 */
 	class Register extends OneShotBehaviour {
 		
@@ -86,7 +81,7 @@ public class prosumerAgent extends GuiAgent
 		public void action()
 		{
 			sendMessage("simComAgent", "Register me","INIT",ACLMessage.SUBSCRIBE);
-			Util.logString("Agent registered", 20);
+			Util.logString(getLocalName()+": Agent registered", 20);
 		}
 	}
 	
@@ -96,22 +91,24 @@ public class prosumerAgent extends GuiAgent
 	 *
 	 */
 	class Distributor extends TickerBehaviour {
+		
+		private static final long serialVersionUID = 7387677922296356597L;
 
 		public Distributor(Agent a, long period) {
 			super(a, period);
 		}
 
-		private static final long serialVersionUID = 7387677922296356597L;
-
 		@Override
 		protected void onTick() {
 			if (role.equals("Distributor")) {
-				
-				//ac.startNewRound();
+				// Start next auction round and send notification of new auction round to all subscribed participants
+				msr.initiateNextAuctionRound(ac.startNewRound());	
+				addNSBehaviour(msr.getSubscriptions().size());
+				ac.setNrOfSubscribers(msr.getSubscriptions().size());
 			} else {
-				
+				//removeBehaviour(this.getBehaviourName());
 			}
-		}		
+		}
 	}
 		
 	/**
@@ -149,7 +146,7 @@ public class prosumerAgent extends GuiAgent
 	        agents.add(result[i].getName());
 	   }
         
-	    Util.logString(String.format("All registered agents: %s", agents), 20);
+	    //Util.logString(String.format("All registered agents: %s", agents), 20);
 	    return agents;
 	}
 	
@@ -177,7 +174,7 @@ public class prosumerAgent extends GuiAgent
 			break;
 		case 4: // update manual setpoint
 			sendMessage("simComAgent", String.format("%s", ge.getParameter(0)) ,"UPDATE" ,ACLMessage.INFORM);
-			Util.logString((this.getName()+String.format(": value changed to %s", ge.getParameter(0))), 20);
+			Util.logString((this.getName()+String.format(": Value changed to %s", ge.getParameter(0))), 20);
 			break;
 		}
 		
@@ -187,7 +184,6 @@ public class prosumerAgent extends GuiAgent
 	 * Compose bid for agent
 	 * @return
 	 */
-
 	@SuppressWarnings("unused")
 	private List<Double> composeBid() {
 		List<Double> bids = new ArrayList<Double>();
@@ -220,17 +216,39 @@ public class prosumerAgent extends GuiAgent
 		role = rl;
 		
 		switch(role) {
-		case "Distributor": // if new role is Distributor, register agent as distributor
+		case "Distributor": 
+			// Register agent as distributor
 			this.register(role);
-			setUpSubscriptionServer();
-			break;
 			
-		default: // default action is to subscribe to a distributor
+			// Try to remove pre-existing behaviours
+			try { removeBehaviour(msi);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(ncf);	} catch (NullPointerException npe) {}
+			try { removeBehaviour(msr);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(nsf);	} catch (NullPointerException npe) {}
+			
+			// Initialize auction
+			 ac = new Auction();
+			
+			// Add role-specific behaviours
+			setUpSubscriptionServer();
+			addBehaviour(db);
+			
+			break;			
+		default:
+			// Try to remove pre-existing behaviours
+			try { removeBehaviour(msi);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(ncf);	} catch (NullPointerException npe) {}
+			try { removeBehaviour(msr);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(nsf);	} catch (NullPointerException npe) {}
+			try { removeBehaviour(db);		} catch (NullPointerException npe) {}
+			
+			// Add role-specific behaviours
 			subscribeToDistributor();
+			
 			break;
 		}			
 				
-		Util.logString(String.format(this.getLocalName()+" role changed to %s", role),20);
+		Util.logString(String.format(this.getLocalName()+": Assumed role of %s", role),20);
 	}
 
 	/**
@@ -266,97 +284,40 @@ public class prosumerAgent extends GuiAgent
 	 */
 	private void subscribeToDistributor() {
 		// Instantiate and set up Subscription Initiator behaviour
-		MySubscriptionInit msi = new MySubscriptionInit(this);		
+		msi = new MySubscriptionInit(this);		
 		this.addBehaviour(msi);
 		
-		Util.logString(String.format("%s subscribed to server", this.getLocalName()), 20);	
+		Util.logString(String.format("%s: Initiated request to subscribe with a Distributor", this.getLocalName()), 20);	
 	}
 	
 	/**
 	 * Initiate Contract NET behaviour
 	 */
-	private void addCNETiBehaviour(ACLMessage msg) {
+	private void addNCIBehaviour(ACLMessage msg) {
 		// Instantiate and set up Contract Net Subscription Initiator behaviour
-		MyCNETInitiator mCNETi = new MyCNETInitiator(this, msg);
-		this.addBehaviour(mCNETi);
+		ncf = new NegotiationClientFSM(this, msg);
+		this.addBehaviour(ncf);
+	}
+	
+	/**
+	 * Initiate Notification Server behaviour
+	 */
+	private void addNSBehaviour(int subCnt) {
+		// Instantiate and set up Notification Server FSM behaviour
+		nsf = new NegotiationServerFSM(this, subCnt);
+		this.addBehaviour(nsf);
 	}
 	
 	/**
 	 * Set up subscription server
 	 */
 	private void setUpSubscriptionServer() {
-		int auctionRound = 1;
-		Agent agent = this;
-		
-		// Instantiate and set up Subscription responder and Contract Net Subscription responder
-		MySubscriptionResp msr = new MySubscriptionResp(agent);
-		MyCNETResponder mCNETr = new MyCNETResponder(agent);
-		
+		// Instantiate and set up Subscription responder
+		msr = new MySubscriptionResp(this);		
 		this.addBehaviour(msr);
-		this.addBehaviour(mCNETr);
 		
-		// Set up periodically executed task for Auction initialization
-		Timer timer = new Timer();
-		timer.schedule(new InitAuctionRound(msr, auctionRound), 0, Util.auctionCycle);
-		
-    	Util.logString(String.format("%s set up subscritption server", this.getLocalName()), 20); 
-	}
-	
-	/**
-	 * Periodic task for initiating auction round
-	 */
-	class InitAuctionRound extends TimerTask {
-		MySubscriptionResp msr;		
-		int i;
-		
-		InitAuctionRound(MySubscriptionResp initMsr, int roundNr) {
-			msr = initMsr;
-			i = roundNr;
-		}
-		
-		public void run() {			
-			// Get values for current auction round initialization
-			Double[] initValues = getAuctionInitValues(i);
-			
-			// Compose Auction initialization message
-			ACLMessage initMsg = new ACLMessage(ACLMessage.INFORM);
-			initMsg.setContent(String.format("Start of round %s; GCsP = %s; GCpP = %s", i, initValues[0], initValues[1]));
-			initMsg.setOntology("AUCTION_INIT");
-			
-			// Send notification of new auction round to all subscribed participants
-			msr.initiateNextAuctionRound(initMsg);
-			
-			// Increase auction round counter
-			i++;
-		}
-		
-		/**
-		 * Method for composing initial values for auction round
-		 * @return
-		 */
-		private Double[] getAuctionInitValues(int roundNr) {			
-			int index;			
-			index = roundNr % Util.nrOfDataRows;
-			
-			List<int[]> sheetData = new ArrayList<int[]>();
-			List<String> readData = new ArrayList<String>();
-			int[] cellData1 = {index+1, 7};
-			int[] cellData2 = {index+1, 8};
-			sheetData.add(cellData1);
-			sheetData.add(cellData2);
-			try {
-				readData = Util.readFromExcel(Util.experimentDataFilePath, "PCC", sheetData);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}			
-			
-			Double[] otherValues = {Double.parseDouble(readData.get(0)), Double.parseDouble(readData.get(1))};		
-			
-			//return gridValues[index];
-			return otherValues;
-		}
-		
-		
+		// Log
+    	Util.logString(String.format("%s: Subscritption server initialized", this.getLocalName()), 20); 
 	}
 	
     /**
@@ -412,7 +373,7 @@ public class prosumerAgent extends GuiAgent
         		reply.addReceiver(sender);
         		
         		// Call method to set up behaviour for communicating CFP message
-        		addCNETiBehaviour(reply);
+        		addNCIBehaviour(reply);
         		
         		break;
         	}
@@ -420,77 +381,13 @@ public class prosumerAgent extends GuiAgent
         
         protected void handleRefuse(ACLMessage refuse) {
             // handle a refusal from the subscription service
-        	Util.logString("Refusal handling from subscription service", 20);
+        	Util.logString(getLocalName()+": Refusal handling from subscription service", 20);
         }
 
         protected void handleAccept(ACLMessage accept) {
             // handle an accept from the subscription service
-        	Util.logString("Acceptance handling from subscription service", 20);
+        	Util.logString(getLocalName()+": Acceptance handling from subscription service", 20);
         }
-    }
-    
-    /** 
-     * ContractNET initiator - CLIENT
-     */
-    public class MyCNETInitiator extends ContractNetInitiator {
-
-    	private static final long serialVersionUID = 8014843266916342564L;
-    	
-		public MyCNETInitiator(Agent a, ACLMessage cfp) {
-			super(a, cfp);
-		}
-		
-		@SuppressWarnings( { "rawtypes", "unchecked" } )
-		protected Vector prepareCfps(ACLMessage cfp) {	
-			// Set up CFP message
-        	cfp.setProtocol(FIPANames.InteractionProtocol.FIPA_CONTRACT_NET);
-        	Vector v = new Vector(1);
-			v.addElement(cfp);
-			return v;
-		}
-		
-		@SuppressWarnings({ "unchecked", "rawtypes" })
-		protected void handlePropose(ACLMessage propose, Vector acceptances) {
-			// Set up reply message
-			ACLMessage reply = propose.createReply();
-			
-			// Send accept or reject messages
-			if(acceptProposal(propose.getContent())) {
-				reply.setPerformative(ACLMessage.REJECT_PROPOSAL);
-			} else {
-				reply.setPerformative(ACLMessage.ACCEPT_PROPOSAL);
-			}
-			
-			// add reply to acceptances vector
-			acceptances.addElement(reply);
-		}
-		
-		protected void handleRefuse(ACLMessage refuse) {
-			System.out.println("Refusal "+ refuse.getContent() +" received from "+refuse.getSender().getLocalName());
-		}
-		
-		protected void handleFailure(ACLMessage failure) {
-			System.out.println("Failure "+ failure.getContent() +" received from "+failure.getSender().getLocalName());
-		}
-		
-		protected void handleInform(ACLMessage inform) {
-			System.out.println("Inform "+ inform.getContent() +" received from "+inform.getSender().getLocalName());			
-		}
-		
-		@SuppressWarnings("rawtypes")
-		protected void handleAllResponses(Vector responses, Vector acceptances) {
-			Enumeration e = responses.elements();
-			while (e.hasMoreElements()) {
-				ACLMessage msg = (ACLMessage) e.nextElement();
-				if(msg.getPerformative() != ACLMessage.PROPOSE ||
-						msg.getPerformative() != ACLMessage.CFP ||
-						msg.getPerformative() != ACLMessage.REFUSE ||
-						msg.getPerformative() != ACLMessage.FAILURE ||
-						msg.getPerformative() != ACLMessage.INFORM) {
-					System.out.println("Received unhandled response "+ msg.getContent() +";"+ msg.getPerformative() +"  from "+msg.getSender().getLocalName());
-				}
-			}
-		}
     }
       
     /**
@@ -516,10 +413,10 @@ public class prosumerAgent extends GuiAgent
         	// Decision whether to accept or deny subscription request
         	if (subscription_msg.getPerformative() == ACLMessage.SUBSCRIBE) {
 	            createSubscription(subscription_msg);
-	            Util.logString(String.format("Agent %s successfully subscribed", subscription_msg.getSender().getLocalName()), 20);
+	            Util.logString(String.format("%s: %s successfully subscribed", getLocalName(), subscription_msg.getSender().getLocalName()), 20);
 	            reply = new ACLMessage(ACLMessage.AGREE);
         	} else {
-        		Util.logString(String.format("Agent %s subscription refused", subscription_msg.getSender().getLocalName()), 20);
+        		Util.logString(String.format("%s: %s subscription refused", getLocalName(), subscription_msg.getSender().getLocalName()), 20);
         		reply = new ACLMessage(ACLMessage.REFUSE);
         	}
             
@@ -530,7 +427,7 @@ public class prosumerAgent extends GuiAgent
         	// Set auction initialization message ontology
         	inform.setOntology("AUCTION_INIT");
         	
-        	Util.logString("---- NEW AUCTION ROUND: "+ inform.getContent() +" ----", 20);    
+        	Util.logString(getLocalName()+": NEW AUCTION ROUND: "+ inform.getContent(), 20);    
         	
             // send notification to all subscribers
             Vector<?> subs = getSubscriptions();
@@ -539,54 +436,7 @@ public class prosumerAgent extends GuiAgent
             }
         }        
       
-    }    
-    
-    /**
-     * ContractNET responder - SERVER
-     */
-    public class MyCNETResponder extends ContractNetResponder {
-    	private Agent myAgent;
-    	private static final long serialVersionUID = -1211425255707453021L;
-		
-		public MyCNETResponder(Agent a) {
-			super(a, MessageTemplate.or(
-					MessageTemplate.MatchPerformative(ACLMessage.CFP), 
-					MessageTemplate.MatchPerformative(ACLMessage.INFORM)));
-			myAgent = a;
-		}
-		
-		protected ACLMessage handleCfp(ACLMessage cfp) throws RefuseException, FailureException, NotUnderstoodException {
-			// Set up proposal message
-			ACLMessage reply = new ACLMessage(ACLMessage.PROPOSE);
-			reply.addReceiver(cfp.getSender());
-			reply.setConversationId(cfp.getConversationId());
-			
-			// Get offer and send it to participant
-			String offer = getOffer(myAgent);
-			reply.setContent(offer);					
-			
-			return reply;
-		}
-
-		protected ACLMessage handleAcceptProposal(ACLMessage cfp, ACLMessage propose, ACLMessage accept) throws FailureException {
-			Util.logString(getLocalName()+": Agent "+propose.getSender()+" proposal accepted", 20);
-			ACLMessage reply = accept.createReply();
-			reply.setContent("CONFIRMED");
-			
-			return reply;
-		}
-		
-		protected void handleRejectProposal(ACLMessage cfp, ACLMessage propose, ACLMessage reject) {
-			Util.logString(getLocalName()+": Agent "+propose.getSender()+" proposal rejected", 20);
-			
-			// If proposal gets rejected, bids are recalculated
-			recalculateBids(propose);			
-		}
-		
-		protected void handleOutOfSequence(ACLMessage cfp,ACLMessage propose, ACLMessage msg){
-			System.out.println("Agent "+getLocalName()+" received Out of Sequence message: " + msg.getContent()+" with performative "+ msg.getPerformative());
-		}
-    }
+    }   
     
     /**
      * Method for extracting initial data from Auction initiation message
@@ -648,16 +498,16 @@ public class prosumerAgent extends GuiAgent
 			Double C = (readData.get(j*2+1) == "") ? 0.0 : Double.parseDouble(readData.get(j*2+1));
 			if (V != 0.0) {
 				Double[] readValues = {V , C};
-				Bid b = bs.new Bid(readValues[0], readValues[1]);
+				Bid b = new Bid(readValues[0], readValues[1]);
 				bs.bids.add(b);
 				}
 		}
 		
-		String logString = (String.format("%s presents bids [" , getLocalName()));
-		String result = "";
+		String logString = (String.format("%s: Presented bids [" , getLocalName()));
+		String result = Integer.toString(roundNr)+";";
 		for(int k=0;k<bs.bids.size();k++) {
 			logString = logString + String.format("V=%.2f kW, C=%.3f €;" , bs.bids.get(k).V, bs.bids.get(k).C );
-			result = result + String.format("%.2f,%.3f;" , bs.bids.get(k).V, bs.bids.get(k).C );
+			result = result + String.format("%.2f %.3f;" , bs.bids.get(k).V, bs.bids.get(k).C );
 		}
 		logString = logString + "]";
 		
@@ -665,28 +515,47 @@ public class prosumerAgent extends GuiAgent
     	
     	return result;    	
     }
-    
-    //TODO - bid recalculation logic
-    private void recalculateBids(ACLMessage msg) {
-    	Util.logString("Recalculating bids", 20);
+  
+    public void sendBids(String sender, String content) {
+    	BidSet bs = new BidSet();
+    	Bid temp;
+    	String[] rawBids = content.split(";");
     	
-    	ACLMessage cfp = new ACLMessage(ACLMessage.CFP);
-    	cfp.setContent("Corrected bids: ");
-    	cfp.addReceiver(msg.getSender());
-    	addCNETiBehaviour(cfp);
+    	int index = 0;
+    	
+    	for (String s: rawBids) {
+    		if(index != 0) {
+	    		try { 
+	    			String[] t = s.replace(",", ".").split(" ");
+	    			temp = new Bid(Double.parseDouble(t[0]), Double.parseDouble(t[1]));
+	    			bs.bids.add(temp);	
+	    		} catch (Exception e) {
+	    			System.out.println(e);
+	    		}
+    		}
+    		index++;
+    	}
+    	ac.presentBid(sender, bs);    	
     }
     
-    //TODO - Proposal acceptance logic
-    private boolean acceptProposal(String s) {
-		long millis = System.currentTimeMillis();
-		
-    	return (millis % 2) == 0;
-    }
-    
-    //TODO - synchronous offer presentation logic
-    private String getOffer(Agent a) {
-    	String result = "1 2 3";
+    public String getOffer(String sender, String content) {
+    	int rndNr;
+    	String[] rawBids = content.split(";");
+    	
+    	rndNr = Integer.parseInt(rawBids[0]);
+    	
+    	Bid res = ac.getOffer(sender, rndNr);
+    	String result = String.format("%.2f %.3f",res.V, res.C);
     	
     	return result;
+    	
+    }
+    
+    public boolean negotiationReady() {
+    	return ac.negotiationDone;
+    }
+
+    public boolean auctionRoundReady() {
+    	return ac.auctionRoundDone;
     }
 }

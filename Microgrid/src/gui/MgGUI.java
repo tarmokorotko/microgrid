@@ -12,7 +12,7 @@ import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 
-import mg.prosumerAgent;
+import mg.ProsumerAgent;
 
 import org.eclipse.swt.layout.GridData;
 
@@ -94,7 +94,7 @@ public class MgGUI {
 
 	
 	public class ChildShell { 
-	     public ChildShell(prosumerAgent a, String name) 
+	     public ChildShell(ProsumerAgent a, String name) 
 	     { 
 	    	System.out.println("Creating child Shell "+name); 
 	        new PrsmrGUI(null, a, name);	
@@ -102,7 +102,7 @@ public class MgGUI {
 	     } 	     
 	  } 
 	
-	public void createChildShell(prosumerAgent a, String name) {
+	public void createChildShell(ProsumerAgent a, String name) {
 		final MgGUI gui = this;
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {

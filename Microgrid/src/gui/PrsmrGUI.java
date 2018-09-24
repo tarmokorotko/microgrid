@@ -16,7 +16,7 @@ import org.eclipse.swt.events.KeyAdapter;
 import org.eclipse.swt.events.KeyEvent;
 
 import mg.Util;
-import mg.prosumerAgent;
+import mg.ProsumerAgent;
 
 import jade.gui.GuiEvent;
 
@@ -24,13 +24,13 @@ import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.events.SelectionAdapter;
 
 public class PrsmrGUI {
-	private prosumerAgent prosumer;
+	private ProsumerAgent prosumer;
 	private Button btnQuit ;
 	private Text inSetpoint;
     Double Sp = 0.0;
     private Shell shell;
     
-	public PrsmrGUI(Display display, prosumerAgent a, String name) { 
+	public PrsmrGUI(Display display, ProsumerAgent a, String name) { 
 		prosumer = a;
 		
 		shell = new Shell(display, SWT.CLOSE); 
@@ -47,7 +47,7 @@ public class PrsmrGUI {
 
     } 
 	
-	protected void createContents(Shell s, prosumerAgent prosumer) {
+	protected void createContents(Shell s, ProsumerAgent prosumer) {
 		Label lblPrsmrName = new Label(s, SWT.NONE); 
 	       lblPrsmrName.setLayoutData(new GridData(SWT.CENTER, SWT.FILL, true, false, 1, 1));
 	       lblPrsmrName.setText(prosumer.getLocalName());
