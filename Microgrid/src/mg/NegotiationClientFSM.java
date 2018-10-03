@@ -1,5 +1,6 @@
 package mg;
 
+import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.DataStore;
@@ -12,26 +13,28 @@ import jade.lang.acl.MessageTemplate;
 public class NegotiationClientFSM extends FSMBehaviour {
 
 	private static final long serialVersionUID = 5498686208672522466L;
-	private static final int delay = 500;
 	
 	private ACLMessage initialMessage;
+	private AID server;
+	private String currentOffer;
+	private int negotiationRounds;
 
 	protected static final String SEND_BIDS = "Send-Proposal";
 	protected static final String RECEIVE_OFFER = "Receive-Offer";
-	protected static final String COMPOSE_REPLY = "Compose-Reply";
 	protected static final String SEND_REPLY = "Send-Reply";
 	protected static final String FINALIZE = "Finalize-negotiation";
 	
 	public NegotiationClientFSM(Agent a, ACLMessage initMsg) {
 		super(a);
 		
+		negotiationRounds = 0;
 		initialMessage = initMsg;
+		server = (AID) initMsg.getAllReceiver().next();
 		
 		// FSM state transitions
 		registerDefaultTransition(SEND_BIDS, RECEIVE_OFFER);
 		registerTransition(RECEIVE_OFFER, RECEIVE_OFFER,0);
-		registerTransition(RECEIVE_OFFER, COMPOSE_REPLY,1);
-		registerDefaultTransition(COMPOSE_REPLY, SEND_REPLY);
+		registerTransition(RECEIVE_OFFER, SEND_REPLY,1);
 		registerTransition(SEND_REPLY,RECEIVE_OFFER,1);
 		registerTransition(SEND_REPLY,FINALIZE,-1);
 		
@@ -48,11 +51,6 @@ public class NegotiationClientFSM extends FSMBehaviour {
 		b.setDataStore(ds);
 		registerState(b, RECEIVE_OFFER);
 		
-		// COMPOSE ACCEPT OR REJECT REPLY
-		b = new ComposeReply(myAgent);
-		b.setDataStore(ds);
-		registerState(b, COMPOSE_REPLY);
-		
 		// SEND REPLY IN RESPONSE TO OFFER
 		b = new SendReply(myAgent);
 		b.setDataStore(ds);
@@ -64,6 +62,16 @@ public class NegotiationClientFSM extends FSMBehaviour {
 		registerLastState(b, FINALIZE);
 	}
 	
+	/**
+	 * Inner method for accepting or rejecting offer
+	 * @param offer
+	 * @return
+	 */
+	private boolean acceptOffer(String offer) {
+		boolean accept = true;
+		
+		return accept;
+	}
 	
 	/**
 	Inner class SendProposal
@@ -100,8 +108,9 @@ public class NegotiationClientFSM extends FSMBehaviour {
 					MessageTemplate.MatchPerformative(ACLMessage.PROPOSE), 
 					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE)
 					));
-			if(msg != null) {				
-				Util.logString(myAgent.getLocalName()+": Received message content: "+msg.getContent());
+			if(msg != null) {	
+				currentOffer = msg.getContent();
+				Util.logString(myAgent.getLocalName()+": Received offer: "+currentOffer);
 				ret = 1;
 			} 			
 		}
@@ -110,22 +119,6 @@ public class NegotiationClientFSM extends FSMBehaviour {
 			return ret;
 		}		
 	} // End of inner class OfferHandler 
-		
-	/**
-	Inner class ComposeReply
-	*/
-	private class ComposeReply extends OneShotBehaviour {
-		private static final long     serialVersionUID = 4762407563773002L;
-		
-		public ComposeReply(Agent a) {
-			super(a);
-		}
-		
-		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
-			myAgent.doWait(delay);
-		}
-	} // End of inner class ComposeReply 
 	
 	/**
 	Inner class SendReply
@@ -140,8 +133,26 @@ public class NegotiationClientFSM extends FSMBehaviour {
 		}
 		
 		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
-			myAgent.doWait(delay);
+			ACLMessage reply = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);			
+			reply.setProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE);
+			reply.addReceiver(server);
+			if(acceptOffer(currentOffer)) {
+				reply.setContent("Accept offer;"+currentOffer);
+				ret = -1;
+			} else {
+				negotiationRounds++;
+				reply.setPerformative(ACLMessage.REJECT_PROPOSAL);
+				if(negotiationRounds <= Util.maxNegotiationRounds) {
+					String correctedBids = ((ProsumerAgent) getAgent()).composeCorrectedBid(initialMessage.getContent(), currentOffer);
+					reply.setContent("Reject offer;Correct bids;" + correctedBids);
+					ret = 1;
+				} else {
+					currentOffer = "0.00 0.000";
+					reply.setContent("Reject offer;" + currentOffer);
+					ret = -1;
+				}
+			}
+			myAgent.send(reply);
 		}
 		
 		public int onEnd() {
@@ -160,8 +171,7 @@ public class NegotiationClientFSM extends FSMBehaviour {
 		}
 		
 		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
-			myAgent.doWait(delay);			
+			Util.logString(myAgent.getLocalName()+": DEAL FOR NEXT OPERATION ROUND :"+currentOffer, 20);
 		}
 	} // End of inner class FinalizeNegotiation 
 }

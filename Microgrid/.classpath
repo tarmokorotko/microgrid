@@ -40,5 +40,6 @@
 	<classpathentry kind="lib" path="C:/Program Files/Java/commons-compress-1.18/commons-compress-1.18-sources.jar"/>
 	<classpathentry kind="lib" path="C:/Program Files/Java/commons-compress-1.18/commons-compress-1.18-tests.jar"/>
 	<classpathentry kind="lib" path="C:/Program Files/Java/commons-compress-1.18/commons-compress-1.18-test-sources.jar"/>
+	<classpathentry kind="lib" path="swing2swt.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

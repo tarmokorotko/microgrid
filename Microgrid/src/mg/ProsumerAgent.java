@@ -37,11 +37,12 @@ import mg.BidSet.Bid;
 public class ProsumerAgent extends GuiAgent
 {
 	private static final long serialVersionUID = 195263862L;
-	
-	transient protected PrsmrGUI myGui;
-	
+		
 	private String role = Util.prosumerRoles[0];
 	private Auction ac;
+	
+	private RunShell rsGui;
+	transient protected PrsmrGUI myGui;
 	
 	Distributor db = new Distributor(this, Util.auctionCycle);
 	MySubscriptionInit msi;
@@ -61,9 +62,11 @@ public class ProsumerAgent extends GuiAgent
 		Object[] args = getArguments();
 		
 		// Instantiate and open GUI
-		RunShell gui = (RunShell)args[0];
-		gui.createShell(getName(), this);		
-				
+		//RunShell gui = (RunShell)args[0];
+		//gui.createShell(getName(), this);
+		rsGui = (RunShell)args[0];
+		rsGui.createShell(getName(), this);
+		
 		// Run behavior for registering agents at Simulation Communication agent
 		Register rg = new Register();
 		addBehaviour(rg);		
@@ -179,7 +182,7 @@ public class ProsumerAgent extends GuiAgent
 		}
 		
 	}
-	
+		
 	/**
 	 * Compose bid for agent
 	 * @return
@@ -509,6 +512,40 @@ public class ProsumerAgent extends GuiAgent
 			logString = logString + String.format("V=%.2f kW, C=%.3f €;" , bs.bids.get(k).V, bs.bids.get(k).C );
 			result = result + String.format("%.2f %.3f;" , bs.bids.get(k).V, bs.bids.get(k).C );
 		}
+		logString = logString + "]"; 
+    		
+		// Update GUI with initial bids
+    	updateGuiTable(bs);    
+		
+    	// Log
+    	Util.logString(logString, 20); 	
+    	
+    	return result;    	
+    }
+    
+    /**
+     * Method for composing prosumer initial bid
+     * @param initialData
+     * @return
+     */
+    public String composeCorrectedBid(String initialBids, String presentedOffer) {
+    	String[] initialBidsSplit = initialBids.split(";");
+    	int roundNr = Integer.parseInt(initialBidsSplit[0]);
+    	BidSet initialBidSet = new BidSet();
+    	for(int i=0;i<(initialBidsSplit.length-1)/2;i++) {
+    		initialBidSet.bids.add(new Bid(Double.parseDouble(initialBidsSplit[i*2 + 1]), Double.parseDouble(initialBidsSplit[i*2 + 2])));
+    	}
+    	BidSet bs = new BidSet();  
+    	
+		// TODO correct bids
+    	bs = initialBidSet;
+		
+		String logString = (String.format("%s: Corrected bids [" , getLocalName()));
+		String result = Integer.toString(roundNr)+";";
+		for(int k=0;k<bs.bids.size();k++) {
+			logString = logString + String.format("V=%.2f kW, C=%.3f €;" , bs.bids.get(k).V, bs.bids.get(k).C );
+			result = result + String.format("%.2f %.3f;" , bs.bids.get(k).V, bs.bids.get(k).C );
+		}
 		logString = logString + "]";
 		
     	Util.logString(logString, 20);  
@@ -547,8 +584,7 @@ public class ProsumerAgent extends GuiAgent
     	Bid res = ac.getOffer(sender, rndNr);
     	String result = String.format("%.2f %.3f",res.V, res.C);
     	
-    	return result;
-    	
+    	return result;    	
     }
     
     public boolean negotiationReady() {
@@ -557,5 +593,17 @@ public class ProsumerAgent extends GuiAgent
 
     public boolean auctionRoundReady() {
     	return ac.auctionRoundDone;
+    }
+    
+    /**
+     * Internal method for updating GUI table
+     * @param bs
+     */    
+    private void updateGuiTable(BidSet bs) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updateTable(getName(),bs);            	
+            }
+    	});
     }
 }

@@ -142,8 +142,8 @@ public class SimComAgent extends Agent
 				
 				switch (conversation) {
 				case "UPDATE":
-					for(int i=0;i<ctrl.prsmr.length;i++) {
-						if(ctrl.prsmr[i].ID.equals(sender.getLocalName())) {
+					for(int i=0;i<Simulation.prsmr.length;i++) {
+						if(Simulation.prsmr[i].ID.equals(sender.getLocalName())) {
 							ag[i] = Double.parseDouble(content);
 						}
 					}

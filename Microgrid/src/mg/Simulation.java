@@ -9,7 +9,7 @@ import jade.wrapper.ContainerController;
 import jade.wrapper.ControllerException;
 import jade.wrapper.StaleProxyException;
 
-public class ctrl {	
+public class Simulation {	
 	
 	static ContainerController cController;
 

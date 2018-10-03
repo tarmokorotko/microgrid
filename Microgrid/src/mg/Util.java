@@ -38,6 +38,7 @@ public final class Util {
 	public final static String firstDataCol = "V";
 	public final static int nrOfDataRows = 24;
 	public final static int maxBidsInSet = 8;
+	public final static int maxNegotiationRounds = 10;
 	
 	
 	/**

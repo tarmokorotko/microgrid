@@ -1,6 +1,8 @@
 package mg;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import jade.core.AID;
@@ -28,8 +30,9 @@ public class NegotiationServerFSM extends FSMBehaviour {
 	protected static final String FINALIZE = "Finalize-negotiation";
 	
 	private static HashMap<AID, String> bids = new HashMap<AID, String>();
-	private static HashMap<AID, String> offers = new HashMap<AID, String>();
-	//private HashMap<String, HashMap<String, String>> auctionLedger = new HashMap<String, HashMap<String, String>>();
+	private static HashMap<AID, String> offers;
+	private static List<ACLMessage> replies;
+	private static HashMap<AID, String> auctionLedger = new HashMap<AID, String>();
 	
 	private int subCnt;
 	
@@ -157,6 +160,7 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		public ComposeOffers(Agent a, HashMap<AID, String> prpsls) {
 			super(a);
 			locProposals = prpsls;
+			 offers = new HashMap<AID, String>();
 		}
 		
 		public void action() {			
@@ -207,7 +211,6 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		}
 		
 		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
 			ACLMessage offer = new ACLMessage(ACLMessage.PROPOSE);
 			offer.setProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE);
 			
@@ -223,16 +226,22 @@ public class NegotiationServerFSM extends FSMBehaviour {
 	Inner class ReplyHandler
 	*/
 	private class ReplyHandler extends OneShotBehaviour {
-		private static final long     serialVersionUID = 4762407563773002L;
+		private static final long serialVersionUID = 4762407563773002L;
 		
 		public ReplyHandler(Agent a) {
 			super(a);
+			replies = new ArrayList<ACLMessage>();
 		}
 		
-		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
-			myAgent.doWait(delay);
-			
+		public void action() {			
+			ACLMessage msg = myAgent.receive(MessageTemplate.and(
+					MessageTemplate.or(MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL),
+										MessageTemplate.MatchPerformative(ACLMessage.REJECT_PROPOSAL)),
+					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE)
+					));
+			if(msg != null) {	
+				replies.add(msg);
+			} 						
 		}
 	} // End of inner class ReplyHandler
 	
@@ -240,18 +249,26 @@ public class NegotiationServerFSM extends FSMBehaviour {
 	Inner class CheckReplies
 	*/
 	private class CheckReplies extends OneShotBehaviour {
-		private static final long     serialVersionUID = 4762407563773002L;
+		private static final long serialVersionUID = 4762407563773002L;
 		
-		private int ret = -1;
+		private int ret = 1;
 		
 		public CheckReplies(Agent a) {
 			super(a);
 		}
 		
 		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
-			myAgent.doWait(delay);
+			for(ACLMessage msg : replies) {
+				if(msg.getPerformative() == ACLMessage.ACCEPT_PROPOSAL) {
+					auctionLedger.put(msg.getSender(), msg.getContent().split(";")[1]);
+				} else if(msg.getContent().split(";").length == 2) {
+						auctionLedger.put(msg.getSender(), msg.getContent().split(";")[1]);
+				} 
+			}
 			
+			if(auctionLedger.size() == subCnt) {
+				ret = -1;
+			}			
 		}
 		
 		public int onEnd() {
@@ -270,10 +287,11 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		}
 		
 		public void action() {
-			Util.logString(myAgent.getLocalName()+": launched FSM state :"+getCurrent(), 20);
-			myAgent.doWait(delay);
-		
-			
+			String logString = "AUCTION ROUND RESULTS ";
+			for(Map.Entry<AID, String> deals : auctionLedger.entrySet()) {
+				logString = logString + deals.getKey().getLocalName() + ": " + deals.getValue()+"; ";
+			}
+			Util.logString(logString);			
 		}
 	} // End of inner class FinalizeNegotiation 
 } 
