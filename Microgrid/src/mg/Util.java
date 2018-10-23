@@ -28,11 +28,18 @@ public final class Util {
 	final static String logFilePath = "C:/Users/Tarmo/Documents/Microgrid_sim/log.txt";
 	final static Boolean appendLog = true;
 	final static Boolean logToFile = true;
+	
 	// Prosumer
 	public final static String[] prosumerRoles = {"Island", "Vendor", "Purchaser", "Distributor"};
+	public static final int GUI_MSG_ROLE = 1;
+	public static final int GUI_MSG_BID_ORIGIN = 2;
+	public static final int GUI_MSG_SEND_BID = 3;
+	public static final int GUI_MSG_REJECT = 4;
+	public static final int GUI_MSG_ACCEPT = 5;
+	public static final int GUI_MSG_NEW_ROUND = 6;
 	
 	// Experiment
-	public final static int auctionCycle = 5000; // Auction cycle time in ms
+	public final static int auctionCycle = 15000; // Auction cycle time in ms
 	public final static String experimentDataFilePath = "C:/Users/Tarmo/OneDrive - TTU 2/Doktoritöö/SimulationInput/Experiment_case_4.xlsx";
 	public final static int firstDataRow = 5;
 	public final static String firstDataCol = "V";

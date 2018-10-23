@@ -29,16 +29,20 @@ public class NegotiationServerFSM extends FSMBehaviour {
 	protected static final String CHECK_ALL_REPLIES_RECEIVED = "All-Replies-Received-Check";
 	protected static final String FINALIZE = "Finalize-negotiation";
 	
-	private static HashMap<AID, String> bids = new HashMap<AID, String>();
+	private static HashMap<AID, String> bids;
 	private static HashMap<AID, String> offers;
 	private static List<ACLMessage> replies;
-	private static HashMap<AID, String> auctionLedger = new HashMap<AID, String>();
+	private static HashMap<AID, String> auctionLedger;
 	
 	private int subCnt;
+	private int auctionRound;
 	
-	public NegotiationServerFSM(Agent a, int subscriptionCnt) {
+	public NegotiationServerFSM(Agent a, int subscriptionCnt, int currentAuctionRound) {
 		super(a);
 		subCnt = subscriptionCnt;
+		bids = new HashMap<AID, String>();
+		auctionLedger = new HashMap<AID, String>();
+		auctionRound = currentAuctionRound;
 		
 		// FSM state transitions
 		registerDefaultTransition(RECEIVE_PROPOSALS, CHECK_ALL_PROPOSALS_RECEIVED);
@@ -99,7 +103,7 @@ public class NegotiationServerFSM extends FSMBehaviour {
 	}
 	
 	/**
-	Inner class ProposalHandler
+	* Inner class ProposalHandler
 	*/
 	private class ReceiveProposal extends OneShotBehaviour {
 		private static final long serialVersionUID = 4762407563773002L;
@@ -113,7 +117,8 @@ public class NegotiationServerFSM extends FSMBehaviour {
 												MessageTemplate.MatchPerformative(ACLMessage.CFP), 
 												MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE)
 												));
-			if(msg != null) {				
+			if(msg != null) {
+				// if bid is received, insert it to the bids hashmap
 				bids.put(msg.getSender(), msg.getContent());
 			} 
 		}
@@ -126,9 +131,8 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		private static final long     serialVersionUID = 4762407563773002L;
 
 		private HashMap<AID, String> locProposals;
-		private int subCnt = 0;
-		
-		private int ret = 0;
+		private int subCnt;		
+		private int ret;
 		
 		public CheckProposals(Agent a, HashMap<AID, String> prpsls, int subscribedCnt) {
 			super(a);
@@ -136,10 +140,14 @@ public class NegotiationServerFSM extends FSMBehaviour {
 			subCnt = subscribedCnt;
 		}
 		
-		public void action() {			
+		public void action() {	
+			ret = 0;
+			
 			if(subCnt == 0) {
+				// If number of subscribers is 0, terminate
 				ret = -1;
 			} else {
+				// If number all proposals received, move to the next state
 				ret = (locProposals.size() == subCnt) ? 1 : 0; 
 			} 						
 		}		
@@ -160,10 +168,11 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		public ComposeOffers(Agent a, HashMap<AID, String> prpsls) {
 			super(a);
 			locProposals = prpsls;
-			 offers = new HashMap<AID, String>();
+			offers = new HashMap<AID, String>();
 		}
 		
-		public void action() {			
+		public void action() {		
+			// iterate through all bid sets and insert them into the auction
 			for(Map.Entry<AID, String> kvPair : locProposals.entrySet()) {
 				((ProsumerAgent) getAgent()).sendBids(kvPair.getKey().getLocalName(), kvPair.getValue());
 			}
@@ -184,12 +193,14 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		}
 		
 		public void action() {
+			// Check if auction negotiation round is complete
 			if(!((ProsumerAgent) getAgent()).negotiationReady() ) {
 				System.out.println("Calculating...");
 				myAgent.doWait(delay);
-			} else {			
+			} else {	
+				// If negotiation round is complete, insert all offers into hashmap
 				for(Map.Entry<AID, String> kvPair : locProposals.entrySet()) {
-					String offer = (((ProsumerAgent) getAgent()).getOffer(kvPair.getKey().getLocalName(), kvPair.getValue()));
+					String offer = (((ProsumerAgent) getAgent()).getOffer(kvPair.getKey().getLocalName(), String.valueOf(auctionRound)));
 					offers.put(kvPair.getKey(), offer);
 				}
 			}	
@@ -210,10 +221,12 @@ public class NegotiationServerFSM extends FSMBehaviour {
 			super(a);
 		}
 		
-		public void action() {
+		public void action() {	
+			// Compose offer message
 			ACLMessage offer = new ACLMessage(ACLMessage.PROPOSE);
 			offer.setProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE);
 			
+			// Send offers
 			for(Map.Entry<AID, String> kvPair : offers.entrySet()) {
 				offer.setContent(kvPair.getValue());
 				offer.addReceiver(kvPair.getKey());
@@ -240,6 +253,7 @@ public class NegotiationServerFSM extends FSMBehaviour {
 					MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_PROPOSE)
 					));
 			if(msg != null) {	
+				// Add received reply to list
 				replies.add(msg);
 			} 						
 		}
@@ -251,21 +265,28 @@ public class NegotiationServerFSM extends FSMBehaviour {
 	private class CheckReplies extends OneShotBehaviour {
 		private static final long serialVersionUID = 4762407563773002L;
 		
-		private int ret = 1;
+		private int ret;
 		
 		public CheckReplies(Agent a) {
 			super(a);
 		}
 		
 		public void action() {
+			ret = 0;
+			
+			// Send replies
 			for(ACLMessage msg : replies) {
 				if(msg.getPerformative() == ACLMessage.ACCEPT_PROPOSAL) {
+					// If reply is accept, then store offer in ledger
 					auctionLedger.put(msg.getSender(), msg.getContent().split(";")[1]);
 				} else if(msg.getContent().split(";").length == 2) {
-						auctionLedger.put(msg.getSender(), msg.getContent().split(";")[1]);
+					// If reply is xx;xx, store into ledger
+					auctionLedger.put(msg.getSender(), msg.getContent().split(";")[1]);
 				} 
 			}
 			
+			// If auction ledger size equals subscribed user count, terminate auction
+			//System.out.println(String.format("Ledger size %s ?= %s subscribed count", auctionLedger.size(), subCnt));
 			if(auctionLedger.size() == subCnt) {
 				ret = -1;
 			}			
@@ -287,11 +308,15 @@ public class NegotiationServerFSM extends FSMBehaviour {
 		}
 		
 		public void action() {
-			String logString = "AUCTION ROUND RESULTS ";
-			for(Map.Entry<AID, String> deals : auctionLedger.entrySet()) {
-				logString = logString + deals.getKey().getLocalName() + ": " + deals.getValue()+"; ";
+			if(auctionLedger.size() != 0) {
+				// Compose string of auction results
+				String logString = "AUCTION ROUND RESULTS ";
+				for(Map.Entry<AID, String> deals : auctionLedger.entrySet()) {
+					logString = logString + deals.getKey().getLocalName() + ": " + deals.getValue()+"; ";
+				}
+				// Log
+				Util.logString(logString);	
 			}
-			Util.logString(logString);			
 		}
 	} // End of inner class FinalizeNegotiation 
 } 

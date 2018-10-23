@@ -17,22 +17,26 @@ public class Auction implements AuctionInterface {
 	private int roundNr = 0;
 	private int R = 0;
 	
-	private int subscriptionClients;
-	
-	private Map<Integer, Map<String, BidSet.Bid>> offerSet = new HashMap<Integer, Map<String, BidSet.Bid>>();
+	private int subscriptionClients;	
 	
 	private Map<Integer, Map<Integer, Map<String, BidSet>>> ledger = new HashMap<Integer, Map<Integer, Map<String, BidSet>>>();
-	private Map<Integer, Map<String, BidSet>> roundLedger = new HashMap<Integer, Map<String, BidSet>>();
-	private Map<String, BidSet> bidsetLedger = new HashMap<String, BidSet>();
+	private Map<Integer, Map<String, BidSet>> roundLedger;
+	private Map<Integer, Map<String, BidSet.Bid>> offerSet;
+	private Map<String, BidSet> bidsetLedger;
 	
 	public ACLMessage startNewRound() {
+		// Initialize round ledgers
+		roundLedger = new HashMap<Integer, Map<String, BidSet>>();
+		bidsetLedger = new HashMap<String, BidSet>();
+		offerSet = new HashMap<Integer, Map<String, BidSet.Bid>>();
+		
 		// Get initialization values for current auction round
 		Double[] initValues = getAuctionInitValues(roundNr);
 		
 		// Compose Auction initialization message
 		ACLMessage initMsg = new ACLMessage(ACLMessage.INFORM);
 		
-		initMsg.setContent(String.format("Start of round %s; GCsP = %s; GCpP = %s", roundNr, initValues[0], initValues[1]));
+		initMsg.setContent(String.format("Start of round %s; GCsP = %.3f; GCpP = %.3f", roundNr, initValues[0], initValues[1]));
 		initMsg.setOntology("AUCTION_INIT");
 		
 		// Increase round iterator count
@@ -53,17 +57,7 @@ public class Auction implements AuctionInterface {
 		bidsetLedger.put(agentName, b);
 		
 		// Check if all bid sets are presented
-		checkAllBidsPresented(rn);
-		
-		/*
-		System.out.print(a.getLocalName()+": [");
-		for(int i = 0;i<b.bids.size();i++) {
-			System.out.print(String.format("%.2f, %.3f; ", b.bids.get(i).V, b.bids.get(i).C));
-		}
-		System.out.println("]");
-		*/
-		//Util.logString(a.getLocalName()+": presented bid!", 20);
-		
+		checkAllBidsPresented(rn);		
 	}
 	
 	private void checkAllBidsPresented(int rn) {
@@ -75,7 +69,7 @@ public class Auction implements AuctionInterface {
 			roundLedger.put(R, bidsetLedger);
 			
 			// Call method for searching for the optimal solution
-			offerSet.put(rn, search(bidsetLedger));
+			offerSet.put(rn, search(bidsetLedger));		
 			
 			// Clear bidset ledger
 			bidsetLedger.clear();			
@@ -90,6 +84,7 @@ public class Auction implements AuctionInterface {
 			R++;
 		}
 	}
+	
 	private void checkRoundComplete(int rn) {
 		boolean auctionComplete = false;
 		
@@ -110,9 +105,11 @@ public class Auction implements AuctionInterface {
 	public Bid getOffer(String a, int r) {
 		Bid offer = new Bid(0.0, 0.0);
 		
+		//printOfferLedger(offerSet);
+		
 		try {
 			offer = offerSet.get(r).get(a);
-		} catch (Exception e) { }
+		} catch (Exception e) { System.out.println("Failed to fetch offer"); }
 		
 		return offer;
 	}
@@ -165,4 +162,25 @@ public class Auction implements AuctionInterface {
  		return offers;
  	}
  	
+	@SuppressWarnings("unused")
+	private void printBidsetLedger(Map<String, BidSet> bsl) {
+		for(Map.Entry<String, BidSet> entry : bsl.entrySet()) {
+			System.out.print(entry.getKey()+":");
+			for(int i = 0;i<entry.getValue().bids.size();i++) {
+				System.out.print(String.valueOf(entry.getValue().bids.get(i).V)+":"+String.valueOf(entry.getValue().bids.get(i).C)+";");
+			}
+			System.out.println("");			
+		}
+	}
+	
+	@SuppressWarnings("unused")
+	private void printOfferLedger(Map<Integer, Map<String, BidSet.Bid>> ol) {
+		for(Map.Entry<Integer, Map<String, BidSet.Bid>> entry : ol.entrySet()) {
+			System.out.print(String.valueOf(entry.getKey())+":");
+			for(Map.Entry<String, BidSet.Bid> ent : entry.getValue().entrySet()) {
+				System.out.print(ent.getKey()+ " - "+ String.valueOf(ent.getValue().V)+":"+String.valueOf(ent.getValue().C)+";");
+			}
+			System.out.println("");			
+		}
+	}
 }

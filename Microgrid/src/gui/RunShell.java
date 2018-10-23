@@ -43,18 +43,8 @@ public class RunShell implements Runnable {
 	private void openShell(Display display, ProsumerAgent pa, String name) {
 		PrsmrGUI myGui = new PrsmrGUI(display, pa ,name);
 		myGuis.put(name, myGui);
-	}
-	
-	/**
-	 * Method for updating GUI table
-	 * @param name
-	 * @param bs
-	 */
-	public synchronized void updateTable(String name,BidSet bs) {
-		PrsmrGUI selectedGui = myGuis.get(name);
-		selectedGui.updateBids(bs);
-	}
-	
+	}	
+
 	/**
 	 * Method for creating GUI shell
 	 * @param name
@@ -69,5 +59,75 @@ public class RunShell implements Runnable {
         		openShell(display, pa, name);
             }
         });
-    }	
+    }
+	
+	/**
+	 * Method for updating GUI table
+	 * @param name
+	 * @param bs
+	 */
+	public synchronized void updateTable(String name,BidSet bs) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.updateBids(bs);
+	}
+	
+	/**
+	 * Method for updating next round setpoint display
+	 * @param name
+	 * @param pccSP
+	 */
+	public synchronized void updatePCCsetpoint(String name, String nextRoundSp) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.updatePCCsetpoint(nextRoundSp);
+	}
+	
+	/**
+	 * Method for updating round info display
+	 * @param name
+	 * @param roundInfo
+	 */
+	public synchronized void updateRoundInfo(String name,String roundInfo) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.updateRoundInfo(roundInfo);
+	}
+	
+	/**
+	 * Method for updating negotiation info display
+	 * @param name
+	 * @param negotiationInfo
+	 */
+	public synchronized void updateNegotiationInfo(String name,String negotiationInfo) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.updateNegotiationInfo(negotiationInfo);
+	}
+	
+	/**
+	 * Method for updating presented offer
+	 * @param name
+	 * @param presentedOffer
+	 */
+	public synchronized void updatePresentedOffer(String name,String presentedOffer) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.updatePresentedOffer(presentedOffer);
+	}	
+
+	/**
+	 * Method for displaying participant container
+	 * @param name
+	 * @param visible
+	 */
+	public synchronized void updateDisplayParticipant(String name,boolean visible) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.displayParticipant(visible);		
+	}
+
+	/**
+	 * Method for displaying distributor container
+	 * @param name
+	 * @param visible
+	 */
+	public synchronized void updateDisplayDistributor(String name,boolean visible) {
+		PrsmrGUI selectedGui = myGuis.get(name);
+		selectedGui.displayDistributor(visible);		
+	}
 }

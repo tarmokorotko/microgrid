@@ -2,27 +2,20 @@ package mg;
 
 import jade.core.AID;
 import jade.core.Agent;
+import jade.core.behaviours.CyclicBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
-import jade.core.behaviours.TickerBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAException;
-import jade.domain.FIPANames;
 import jade.domain.FIPAAgentManagement.DFAgentDescription;
-import jade.domain.FIPAAgentManagement.NotUnderstoodException;
-import jade.domain.FIPAAgentManagement.RefuseException;
 import jade.domain.FIPAAgentManagement.ServiceDescription;
 import jade.gui.GuiAgent;
 import jade.gui.GuiEvent;
 import jade.lang.acl.ACLMessage;
-import jade.lang.acl.MessageTemplate;
-import jade.proto.SubscriptionInitiator;
-import jade.proto.SubscriptionResponder;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.Vector;
 
 import gui.PrsmrGUI;
 import gui.RunShell;
@@ -40,14 +33,23 @@ public class ProsumerAgent extends GuiAgent
 		
 	private String role = Util.prosumerRoles[0];
 	private Auction ac;
+	private boolean bidOriginManual = false;
+	private boolean sendBid = false;
+	private boolean acceptOffer = false;
+	private boolean rejectOffer = false;
+	private BidSet currentBidSet;
+	private int currentAuctionRound;
+	
+	@SuppressWarnings("unused")
+	private Bid currentOffer;
 	
 	private RunShell rsGui;
 	transient protected PrsmrGUI myGui;
 	
 	Distributor db = new Distributor(this, Util.auctionCycle);
-	MySubscriptionInit msi;
+	AuctionInitiator msi;
 	NegotiationClientFSM ncf;
-	MySubscriptionResp msr;
+	AuctionResponder msr;
 	NegotiationServerFSM nsf;
 	
 	/**
@@ -62,8 +64,6 @@ public class ProsumerAgent extends GuiAgent
 		Object[] args = getArguments();
 		
 		// Instantiate and open GUI
-		//RunShell gui = (RunShell)args[0];
-		//gui.createShell(getName(), this);
 		rsGui = (RunShell)args[0];
 		rsGui.createShell(getName(), this);
 		
@@ -77,7 +77,7 @@ public class ProsumerAgent extends GuiAgent
 	 * Behaviour for registering agents at Simulation Communication agent
 	 * @author Tarmo
 	 */
-	class Register extends OneShotBehaviour {
+	private class Register extends OneShotBehaviour {
 		
 		private static final long serialVersionUID = 9288461912L;
 		
@@ -92,355 +92,104 @@ public class ProsumerAgent extends GuiAgent
 	 * Behaviour of Distributor role
 	 * @author Tarmo
 	 *
-	 */
-	class Distributor extends TickerBehaviour {
-		
+	 */	
+	private class Distributor extends CyclicBehaviour {	
 		private static final long serialVersionUID = 7387677922296356597L;
-
-		public Distributor(Agent a, long period) {
-			super(a, period);
-		}
-
-		@Override
-		protected void onTick() {
-			if (role.equals("Distributor")) {
-				// Start next auction round and send notification of new auction round to all subscribed participants
-				msr.initiateNextAuctionRound(ac.startNewRound());	
-				addNSBehaviour(msr.getSubscriptions().size());
-				ac.setNrOfSubscribers(msr.getSubscriptions().size());
-			} else {
-				//removeBehaviour(this.getBehaviourName());
-			}
-		}
-	}
 		
-	/**
-	 * Send message to another agent
-	 * @param targetName
-	 * @param content
-	 * @param conversation
-	 * @param type
-	 */
-	private void sendMessage(String targetName, String content, String conversation, int type)
-	{
-		ACLMessage message = new ACLMessage(type);
-		message.addReceiver(new AID (targetName, AID.ISLOCALNAME));
-		message.setContent(content);
-		message.setConversationId(conversation);
-		this.send(message);
-	}
-	
-	/**
-	 * Output list of agent AIDs
-	 * @param agentType
-	 * @return
-	 * @throws FIPAException
-	 */
-	private List<AID> getAgentAIDs(String agentType) throws FIPAException {
-		List<AID> agents = new ArrayList<AID>();		
-		DFAgentDescription dfd = new DFAgentDescription();
-        ServiceDescription sd  = new ServiceDescription();
-        sd.setType( agentType );
-        dfd.addServices(sd);
-        
-        DFAgentDescription[] result = DFService.search(this, dfd);
-        
-	    for (int i=0; i<result.length;i++){
-	        agents.add(result[i].getName());
+		private long 	timeout, wakeupTime;
+		   
+		public Distributor(Agent a, long timeout) {
+			super(a);
+			this.timeout = timeout;
+		}
+		   
+		public void onStart() {
+			wakeupTime = System.currentTimeMillis() + timeout;
+			handleElapsedTimeout();
+		}
+		
+		public void action() {
+			long dt = wakeupTime - System.currentTimeMillis();
+
+			if (dt <= 0) {
+				handleElapsedTimeout();
+			}   
 	   }
-        
-	    //Util.logString(String.format("All registered agents: %s", agents), 20);
-	    return agents;
-	}
-	
-	/**
-	 * Terminate agent
-	 */
-	public void killAgent( ) {
-		String name = this.getName();
-		this.takeDown();
-		this.doDelete();
-		Util.logString(name+": Agent terminated.", 20);
-	}
-
-	/**
-	 * Handle GUI events
-	 */
-	@Override
-	protected void onGuiEvent(GuiEvent ge) {
-		int event = ge.getType();
+		   
+		protected void handleElapsedTimeout() { 
+			if (role.equals("Distributor")) {
+				executeNextAuctionRound();	
+				   wakeupTime = System.currentTimeMillis() + timeout;			
+			}
+	   } 
 		
-		switch(event) {
-		case 1: // change role
-			String rl = (String)ge.getParameter(0);
-			setRole(rl);
-			break;
-		case 4: // update manual setpoint
-			sendMessage("simComAgent", String.format("%s", ge.getParameter(0)) ,"UPDATE" ,ACLMessage.INFORM);
-			Util.logString((this.getName()+String.format(": Value changed to %s", ge.getParameter(0))), 20);
-			break;
+		public void next() {
+			executeNextAuctionRound();
+			wakeupTime = System.currentTimeMillis() + timeout;
 		}
 		
-	}
-		
-	/**
-	 * Compose bid for agent
-	 * @return
-	 */
-	@SuppressWarnings("unused")
-	private List<Double> composeBid() {
-		List<Double> bids = new ArrayList<Double>();
-		
-		// Random bid composition
-		Random r = new Random();
-		Double[] blim = {-50.0, 50.0}; 
-		
-		for(int i=0;i<8;i++) {
-			Double b = blim[0] + (blim[1] - blim[0]) * r.nextDouble();
-			bids.add(b);
+		void executeNextAuctionRound() {
+			// Start next auction round and send notification of new auction round to all subscribed participants
+			ACLMessage initMsg = ac.startNewRound();
+			msr.initiateNextAuctionRound(initMsg);
+			String msg[] = initMsg.getContent().split(";");
+			String a = msg[0].substring(msg[0].indexOf("round ")+6);
+			currentAuctionRound = Integer.parseInt(a);
+			updateGuiRoundInfo("Auction round "+a);
+			addNSBehaviour(msr.getSubscriptions().size(), currentAuctionRound);
+			ac.setNrOfSubscribers(msr.getSubscriptions().size());			
 		}
-		
-		// Log output
-		Util.logString(String.format("bids: %s", bids), 20);
-		
-		return bids;		
 	}
 	
-	/**
-	 * Set role for agent
-	 * @param rl
-	 */
-	private void setRole(String rl) {
-		// if previous role was Distributor, take down agent
-		if (role.equals("Distributor")) {
-			this.takeDown();
-		}
-		
-		role = rl;
-		
-		switch(role) {
-		case "Distributor": 
-			// Register agent as distributor
-			this.register(role);
-			
-			// Try to remove pre-existing behaviours
-			try { removeBehaviour(msi);		} catch (NullPointerException npe) {}
-			try { removeBehaviour(ncf);	} catch (NullPointerException npe) {}
-			try { removeBehaviour(msr);		} catch (NullPointerException npe) {}
-			try { removeBehaviour(nsf);	} catch (NullPointerException npe) {}
-			
-			// Initialize auction
-			 ac = new Auction();
-			
-			// Add role-specific behaviours
-			setUpSubscriptionServer();
-			addBehaviour(db);
-			
-			break;			
-		default:
-			// Try to remove pre-existing behaviours
-			try { removeBehaviour(msi);		} catch (NullPointerException npe) {}
-			try { removeBehaviour(ncf);	} catch (NullPointerException npe) {}
-			try { removeBehaviour(msr);		} catch (NullPointerException npe) {}
-			try { removeBehaviour(nsf);	} catch (NullPointerException npe) {}
-			try { removeBehaviour(db);		} catch (NullPointerException npe) {}
-			
-			// Add role-specific behaviours
-			subscribeToDistributor();
-			
-			break;
-		}			
-				
-		Util.logString(String.format(this.getLocalName()+": Assumed role of %s", role),20);
-	}
-
-	/**
-	 * Deregister agent from DF
-	 */
-	protected void takeDown() 
-    {
-       try { DFService.deregister(this); }
-       catch (Exception e) {}
-    }
+	/********************************************************************************
+     * AGENT COMMUNICATION INNER CLASSES AND METHODS ********************************
+     ********************************************************************************/
 	
 	/**
-	 * Register agent at DF
-	 * @param serviceName
+	 * Initiate Negotiation Client behaviour
 	 */
-	protected void register(String serviceName) {
-		DFAgentDescription dfd = new DFAgentDescription();
-        ServiceDescription sd  = new ServiceDescription();
-        dfd.setName( getAID() );  
-        sd.setType( serviceName );
-        sd.setName( getLocalName() );
-        dfd.addServices(sd);
-
-        try {  
-            DFService.register(this, dfd );  
-        } catch (FIPAException fe) { 
-        	Util.logString(String.format("%s", fe.toString()), 30);
-        }
-	}
-	
-	/**
-	 * Subscribe to subscription server
-	 */
-	private void subscribeToDistributor() {
-		// Instantiate and set up Subscription Initiator behaviour
-		msi = new MySubscriptionInit(this);		
-		this.addBehaviour(msi);
-		
-		Util.logString(String.format("%s: Initiated request to subscribe with a Distributor", this.getLocalName()), 20);	
-	}
-	
-	/**
-	 * Initiate Contract NET behaviour
-	 */
-	private void addNCIBehaviour(ACLMessage msg) {
+	void addNCBehaviour(ACLMessage msg) {
 		// Instantiate and set up Contract Net Subscription Initiator behaviour
 		ncf = new NegotiationClientFSM(this, msg);
 		this.addBehaviour(ncf);
 	}
 	
 	/**
-	 * Initiate Notification Server behaviour
+	 * Initiate Negotiation Server behaviour
 	 */
-	private void addNSBehaviour(int subCnt) {
+	private void addNSBehaviour(int subCnt, int auctionRound) {
 		// Instantiate and set up Notification Server FSM behaviour
-		nsf = new NegotiationServerFSM(this, subCnt);
+		nsf = new NegotiationServerFSM(this, subCnt, auctionRound);
 		this.addBehaviour(nsf);
 	}
 	
 	/**
-	 * Set up subscription server
+	 * Set up auction responder - SERVER
 	 */
 	private void setUpSubscriptionServer() {
 		// Instantiate and set up Subscription responder
-		msr = new MySubscriptionResp(this);		
+		msr = new AuctionResponder(this);		
 		this.addBehaviour(msr);
 		
 		// Log
     	Util.logString(String.format("%s: Subscritption server initialized", this.getLocalName()), 20); 
 	}
 	
-    /**
-	 * Subscription initiator - CLIENT
+	/**
+	 * Subscribe to auction responder -> SERVER
 	 */
-    class MySubscriptionInit extends SubscriptionInitiator {
-    	
-    	private static final long serialVersionUID = -7111020906826495420L;	
+	private void subscribeToDistributor() {
+		// Instantiate and set up Subscription Initiator behaviour
+		msi = new AuctionInitiator(this);		
+		this.addBehaviour(msi);
 		
-		MySubscriptionInit(Agent agent) {
-            super(agent, new ACLMessage(ACLMessage.SUBSCRIBE));            
-        }
-			
-		protected Vector<ACLMessage> prepareSubscriptions(ACLMessage subscription) {
-			// Search for agents in the role of Distributor
-			List<AID> agents;			
-			AID server = null;
-			try {
-				agents = getAgentAIDs("Distributor");
-				if(agents.size() > 0) {
-					server = agents.get(0);
-				}
-			} catch (FIPAException e) {
-				e.printStackTrace();
-			}
-			
-        	// Set up subscription message
-        	subscription.setProtocol(FIPANames.InteractionProtocol.FIPA_SUBSCRIBE);
-            subscription.addReceiver(server);   // the agent supplying a subscription service (has a responder role)
-            subscription.setContent(String.format("Subscribe agent %s", this.getAgent().getLocalName()));   // the subscription content
-            subscription.setConversationId( String.format("SUBSCRIPTION of %s", this.getAgent().getLocalName()));            
-            Vector<ACLMessage> v = new Vector<ACLMessage>();
-            v.addElement(subscription);
-            
-            return v;
-        }
-		
-        protected void handleInform(ACLMessage inform) {
-            // Extract data from inform message
-        	String id = inform.getOntology();
-        	AID sender = inform.getSender();
-        	
-        	switch(id) {
-        	case "AUCTION_INIT":
-        		// Compose initial bid data for CFP message
-        		Double[] initialAuctionData;
-        		initialAuctionData = extractInitMessage(inform.getContent());
-        		String initialBids = composeInitialBid(initialAuctionData);
-        		
-        		// Compose CFP message
-        		ACLMessage reply = new ACLMessage(ACLMessage.CFP);
-        		reply.setContent(initialBids);
-        		reply.addReceiver(sender);
-        		
-        		// Call method to set up behaviour for communicating CFP message
-        		addNCIBehaviour(reply);
-        		
-        		break;
-        	}
-        }
+		Util.logString(String.format("%s: Initiated request to subscribe with a Distributor", this.getLocalName()), 20);	
+	}
+	
+    /********************************************************************************
+     * AGENT COMMUNICATION INNER CLASSES AND METHODS END ****************************
+     ********************************************************************************/
         
-        protected void handleRefuse(ACLMessage refuse) {
-            // handle a refusal from the subscription service
-        	Util.logString(getLocalName()+": Refusal handling from subscription service", 20);
-        }
-
-        protected void handleAccept(ACLMessage accept) {
-            // handle an accept from the subscription service
-        	Util.logString(getLocalName()+": Acceptance handling from subscription service", 20);
-        }
-    }
-      
-    /**
-	 * Subscription responder - SERVER
-	 */
-    public class MySubscriptionResp extends SubscriptionResponder {
-
-		private static final long serialVersionUID = 9044256482649608950L;
-				
-		MySubscriptionResp(Agent a) {
-            super(a, MessageTemplate.and(                                       
-            		MessageTemplate.or(
-            				MessageTemplate.MatchPerformative(ACLMessage.SUBSCRIBE), 
-            				MessageTemplate.MatchPerformative(ACLMessage.CANCEL)),                                       
-            		MessageTemplate.MatchProtocol(FIPANames.InteractionProtocol.FIPA_SUBSCRIBE))
-            		);            
-        }		
-       
-        protected ACLMessage handleSubscription(ACLMessage subscription_msg) throws NotUnderstoodException, RefuseException {
-        	// Instantiate reply message
-        	ACLMessage reply;
-            
-        	// Decision whether to accept or deny subscription request
-        	if (subscription_msg.getPerformative() == ACLMessage.SUBSCRIBE) {
-	            createSubscription(subscription_msg);
-	            Util.logString(String.format("%s: %s successfully subscribed", getLocalName(), subscription_msg.getSender().getLocalName()), 20);
-	            reply = new ACLMessage(ACLMessage.AGREE);
-        	} else {
-        		Util.logString(String.format("%s: %s subscription refused", getLocalName(), subscription_msg.getSender().getLocalName()), 20);
-        		reply = new ACLMessage(ACLMessage.REFUSE);
-        	}
-            
-			return reply;
-        }
-      
-        protected void initiateNextAuctionRound(ACLMessage inform) {
-        	// Set auction initialization message ontology
-        	inform.setOntology("AUCTION_INIT");
-        	
-        	Util.logString(getLocalName()+": NEW AUCTION ROUND: "+ inform.getContent(), 20);    
-        	
-            // send notification to all subscribers
-            Vector<?> subs = getSubscriptions();
-            for(int i=0; i<subs.size(); i++) {
-                ((SubscriptionResponder.Subscription)subs.elementAt(i)).notify(inform);
-            }
-        }        
-      
-    }   
-    
     /**
      * Method for extracting initial data from Auction initiation message
      * @param initMsg
@@ -455,8 +204,8 @@ public class ProsumerAgent extends GuiAgent
     	String c = initialMessage[2].substring(initialMessage[2].indexOf("GCpP = ")+7);
     	
     	initialData[0] = Double.parseDouble(a);
-    	initialData[1] = Double.parseDouble(b);
-    	initialData[2] = Double.parseDouble(c);    	
+    	initialData[1] = Double.parseDouble(b.replace(",", "."));
+    	initialData[2] = Double.parseDouble(c.replace(",", "."));    	
     	
     	return initialData;
     }
@@ -466,7 +215,7 @@ public class ProsumerAgent extends GuiAgent
      * @param initialData
      * @return
      */
-    private String composeInitialBid(Double[] initialData) {
+    private BidSet composeInitialBid(Double[] initialData) {
     	int roundNr = initialData[0].intValue();
     	BidSet bs = new BidSet();  
     	
@@ -514,17 +263,18 @@ public class ProsumerAgent extends GuiAgent
 		}
 		logString = logString + "]"; 
     		
-		// Update GUI with initial bids
-    	updateGuiTable(bs);    
+		// Update GUI with initial bids and round info
+		//updateGuiRoundInfo(String.format("Auction round %s", roundNr));
+    	//updateGuiTable(bs);    
 		
     	// Log
-    	Util.logString(logString, 20); 	
+    	//Util.logString(logString, 20); 	
     	
-    	return result;    	
+    	return bs;    	
     }
     
     /**
-     * Method for composing prosumer initial bid
+     * Method for correcting prosumer bid
      * @param initialData
      * @return
      */
@@ -553,6 +303,11 @@ public class ProsumerAgent extends GuiAgent
     	return result;    	
     }
   
+    /**
+     * Public method to send bids for running auction
+     * @param sender
+     * @param content
+     */
     public void sendBids(String sender, String content) {
     	BidSet bs = new BidSet();
     	Bid temp;
@@ -575,6 +330,12 @@ public class ProsumerAgent extends GuiAgent
     	ac.presentBid(sender, bs);    	
     }
     
+    /**
+     * Public method to get prosumer offers from auction results
+     * @param sender
+     * @param content
+     * @return
+     */
     public String getOffer(String sender, String content) {
     	int rndNr;
     	String[] rawBids = content.split(";");
@@ -587,14 +348,129 @@ public class ProsumerAgent extends GuiAgent
     	return result;    	
     }
     
+    /**
+     * Public method to check if auction negotiation round is finished
+     * @return
+     */
     public boolean negotiationReady() {
     	return ac.negotiationDone;
     }
 
+    /**
+     * Public method to check if auction round is finished
+     * @return
+     */
     public boolean auctionRoundReady() {
     	return ac.auctionRoundDone;
     }
     
+    public void outputAgentName() {
+    	System.out.println("this is my agent name:"+getLocalName());
+    }
+    
+    public boolean getBidOrigin() {
+    	return bidOriginManual;
+    }
+    
+    public void setInitialBidFromFile(String initMsg) {
+    	Double[] initialAuctionData;
+		initialAuctionData = extractInitMessage(initMsg);
+		BidSet bs = composeInitialBid(initialAuctionData);	
+    	updateGuiTable(bs);
+    }
+    
+    public void setInitialBidManually(String initMsg) {
+    	Double[] temp = {0.0, 0.0};
+    	updateGuiTable(new BidSet(temp));
+    }
+        
+    public String getBidSetFromGui() {
+    	//String result = "Test 1 2 3";
+		String result = Integer.toString(currentAuctionRound)+";";
+		String logString = (String.format("%s: Presented bids [" , getLocalName()));
+    	for(int k=0;k<currentBidSet.bids.size();k++) {
+			result = result + String.format("%.2f %.3f;" , currentBidSet.bids.get(k).V, currentBidSet.bids.get(k).C );
+			logString = logString + String.format("V=%.2f kW, C=%.3f €;" , currentBidSet.bids.get(k).V, currentBidSet.bids.get(k).C );
+		}
+		logString = logString + "]"; 
+    	
+    	Util.logString(logString, 20); 	
+    	
+    	return result;
+    }
+    
+    public void updateCurrentOffer(String offer, int currentNegotiationRound, int maxNegotiationRound) {
+    	String[] s = offer.split(" ");
+    	Double V = 0.0;
+    	Double C = 0.0;
+    	
+    	try {
+    		V = Double.parseDouble(s[0].replace(",","."));
+    		C = Double.parseDouble(s[1].replace(",","."));
+    	} catch (Exception e) {
+    		System.out.println("Incorrect number format for Double");
+    	}
+    	
+    	Bid b = new Bid(V, C);
+    	currentOffer = b;
+    	
+    	String a = String.format("OFFER: %.2f kW @ %.3f €", b.V, b.C);
+    	updateGuiPresentedOffer(a);
+    	updateGuiNegotiationInfo(String.format("Negotiation round %s/%s", currentNegotiationRound, maxNegotiationRound));
+    }
+    
+    public void updateRoundInfo(String newRoundInfo) {
+    	Double[] initData = extractInitMessage(newRoundInfo);
+    	String text = String.format("R: %d; G: buys @ %.3f €; sells @ %.3f €", initData[0].intValue(), initData[1], initData[2]);
+    	updateGuiRoundInfo(text);
+    }
+    
+    public void updateDealInfo(String dealInfo) {
+    	String[] deal = dealInfo.split(" ");
+    	String text = String.format("Next round: %s kW @ %s", deal[0], deal[1]);
+    	updateGuiPccSP(text);
+    }
+    
+    /********************************************************************************
+     * GUI INTERACTION METHODS ******************************************************
+     ********************************************************************************/
+
+	/**
+	 * GUI event handlers
+	 */
+	@Override
+	protected void onGuiEvent(GuiEvent ge) {
+		int event = ge.getType();
+		//TODO - GUI handlers
+		switch(event) {
+		case Util.GUI_MSG_ROLE: // change role
+			String rl = (String)ge.getParameter(0);
+			setRole(rl);
+			break;
+		case Util.GUI_MSG_BID_ORIGIN: // change bid origin
+			String origin = (String)ge.getParameter(0);
+			if (origin.equals("Manual")) {
+				bidOriginManual = true;
+			} else {
+				bidOriginManual = false;
+			}			
+			break;
+		case Util.GUI_MSG_SEND_BID: // handle send bid command
+			currentBidSet = (BidSet)ge.getParameter(0);
+			sendBid = true;
+			break;
+		case Util.GUI_MSG_REJECT: // handle reject message command
+			rejectOffer = true;
+			break;
+		case Util.GUI_MSG_ACCEPT: // handle accept message command
+			acceptOffer = true;
+			break;
+		case Util.GUI_MSG_NEW_ROUND: // handle new auction round command
+			db.next();
+			break;
+		}		
+	}
+	
     /**
      * Internal method for updating GUI table
      * @param bs
@@ -606,4 +482,244 @@ public class ProsumerAgent extends GuiAgent
             }
     	});
     }
+    
+    /**
+     * Internal method for updating GUI PCC SP display
+     * @param pccSP
+     */
+    private void updateGuiPccSP(String nextRoundSp) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updatePCCsetpoint(getName(), nextRoundSp);            	
+            }
+    	});
+    }
+    
+    /**
+     * Internal method for updating GUI round info display
+     * @param roundInfo
+     */
+    private void updateGuiRoundInfo(String roundInfo) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updateRoundInfo(getName(), roundInfo);           	
+            }
+    	});
+    }
+    
+    /**
+     * Internal method for updating GUI negotiation info display
+     * @param negotiationInfo
+     */
+    private void updateGuiNegotiationInfo(String negotiationInfo) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updateNegotiationInfo(getName(), negotiationInfo);           	
+            }
+    	});
+    }
+    
+    /**
+     * Internal method for updating GUI presented offer display
+     * @param presentedOffer
+     */
+    private void updateGuiPresentedOffer(String presentedOffer) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updatePresentedOffer(getName(), presentedOffer);           	
+            }
+    	});
+    }
+
+    /**
+     * Internal method for updating GUI distributor container display
+     * @param visible
+     */
+    private void updateGuiDisplayDistributor(boolean visible) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updateDisplayDistributor(getName(), visible);           	
+            }
+    	});
+    }
+    
+    /**
+     * Internal method for updating GUI participant container display
+     * @param visible
+     */
+    private void updateGuiDisplayParticipant(boolean visible) {
+    	rsGui.getDisplay().asyncExec(new Runnable() {
+            public void run() {
+        		rsGui.updateDisplayParticipant(getName(), visible);           	
+            }
+    	});
+    }
+    
+    /********************************************************************************
+     * GUI INTERACTION METHODS END **************************************************
+     ********************************************************************************/
+
+    public boolean getSendStatus() {
+    	return sendBid; 
+    }
+    
+    public void resetSendStatus() {
+    	sendBid = false;
+    }
+    
+    public boolean getAcceptStatus() {
+    	return acceptOffer;
+    }
+    
+    public void resetAcceptStatus() {
+    	acceptOffer = false;
+    }
+    
+    public boolean getRejectStatus() {
+    	return rejectOffer;
+    }
+    
+    public void resetRejectStatus() {
+    	rejectOffer = false;
+    }        	
+
+	/********************************************************************************
+	 * AUXILIARY METHODS ************************************************************
+	 ********************************************************************************/
+    
+	/**
+	 * Send message to another agent
+	 * @param targetName
+	 * @param content
+	 * @param conversation
+	 * @param type
+	 */
+	private void sendMessage(String targetName, String content, String conversation, int type)
+	{
+		ACLMessage message = new ACLMessage(type);
+		message.addReceiver(new AID (targetName, AID.ISLOCALNAME));
+		message.setContent(content);
+		message.setConversationId(conversation);
+		this.send(message);
+	}
+
+	/**
+	 * Terminate agent
+	 */
+	public void killAgent( ) {
+		String name = this.getName();
+		this.takeDown();
+		this.doDelete();
+		Util.logString(name+": Agent terminated.", 20);
+	}
+	
+	/**
+	 * Random bid generator
+	 * @return
+	 */
+	@SuppressWarnings("unused")
+	private List<Double> composeRandomBid() {
+		List<Double> bids = new ArrayList<Double>();
+		
+		// Random bid composition
+		Random r = new Random();
+		Double[] blim = {-50.0, 50.0}; 
+		
+		for(int i=0;i<8;i++) {
+			Double b = blim[0] + (blim[1] - blim[0]) * r.nextDouble();
+			bids.add(b);
+		}
+		
+		// Log output
+		Util.logString(String.format("bids: %s", bids), 20);
+		
+		return bids;		
+	}
+	
+	/**
+	 * Set role for agent
+	 * @param rl
+	 */
+	private void setRole(String rl) {
+		// if previous role was Distributor, take down agent
+		if (role.equals("Distributor")) {
+			this.takeDown();
+		}
+		
+		role = rl;
+		
+		switch(role) {
+		case "Distributor": 
+			// Register agent as distributor
+			this.register(role);
+			
+			// Try to remove pre-existing behaviours
+			try { removeBehaviour(msi);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(ncf);	} catch (NullPointerException npe) {}
+			try { removeBehaviour(msr);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(nsf);	} catch (NullPointerException npe) {}
+			
+			// Initialize auction
+			 ac = new Auction();
+			
+			// Add role-specific behaviours
+			setUpSubscriptionServer();
+			addBehaviour(db);
+			
+			// Display distributor container and hide participant container in GUI
+			updateGuiDisplayDistributor(true);
+			updateGuiDisplayParticipant(false);
+			
+			break;			
+		default:
+			// Try to remove pre-existing behaviours
+			try { removeBehaviour(msi);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(ncf);	} catch (NullPointerException npe) {}
+			try { removeBehaviour(msr);		} catch (NullPointerException npe) {}
+			try { removeBehaviour(nsf);	} catch (NullPointerException npe) {}
+			try { removeBehaviour(db);		} catch (NullPointerException npe) {}
+			
+			// Add role-specific behaviours
+			subscribeToDistributor();
+
+			// Hide distributor container in GUI
+			updateGuiDisplayDistributor(false);
+			
+			break;
+		}			
+				
+		Util.logString(String.format(this.getLocalName()+": Assumed role of %s", role),20);
+	}
+
+	/**
+	 * Deregister agent from DF
+	 */
+	protected void takeDown() 
+    {
+       try { DFService.deregister(this); }
+       catch (Exception e) {}
+    }
+	
+	/**
+	 * Register agent at DF
+	 * @param serviceName
+	 */
+	protected void register(String serviceName) {
+		DFAgentDescription dfd = new DFAgentDescription();
+        ServiceDescription sd  = new ServiceDescription();
+        dfd.setName( getAID() );  
+        sd.setType( serviceName );
+        sd.setName( getLocalName() );
+        dfd.addServices(sd);
+
+        try {  
+            DFService.register(this, dfd );  
+        } catch (FIPAException fe) { 
+        	Util.logString(String.format("%s", fe.toString()), 30);
+        }
+	}
+
+	/********************************************************************************
+	 * AUXILIARY METHODS END ********************************************************
+	 ********************************************************************************/
 }
